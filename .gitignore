@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.venv/
+venv/
+env/
+ENV/
+
+# Python & Testing Caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+*.pytest_cache*
+*.zip
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Production Build Outputs
+dist/
+build/
+out/
+.next/
+
+# Environment Variables & Secrets (CRITICAL)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+*.env
+!*.env.example
+
+# Firebase & Cloud Keys (NEVER COMMIT)
+serviceAccountKey.json
+firebase-adminsdk*.json
+*firebase*.json
+!firebase.json
+!local_firestore_db.json
+local_firestore_db.backup*.json
+
+# Logs & Runtime
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+firebase-debug.log*
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# IDE & OS Metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+.dataconnect/
+.firebase/

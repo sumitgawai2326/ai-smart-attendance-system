@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="128" fill="#0f172a"/>
+  <rect x="24" y="24" width="464" height="464" rx="104" stroke="#3b82f6" stroke-width="8" stroke-dasharray="16 16"/>
+  <!-- Facial scan frame -->
+  <path d="M128 176V144C128 135.163 135.163 128 144 128H176" stroke="#38bdf8" stroke-width="16" stroke-linecap="round"/>
+  <path d="M384 176V144C384 135.163 376.837 128 368 128H336" stroke="#38bdf8" stroke-width="16" stroke-linecap="round"/>
+  <path d="M128 336V368C128 376.837 135.163 384 144 384H176" stroke="#38bdf8" stroke-width="16" stroke-linecap="round"/>
+  <path d="M384 336V368C384 376.837 376.837 384 368 384H336" stroke="#38bdf8" stroke-width="16" stroke-linecap="round"/>
+  <!-- User Silhouette -->
+  <circle cx="256" cy="224" r="56" fill="#38bdf8"/>
+  <path d="M184 344C184 304.235 216.235 272 256 272C295.765 272 328 304.235 328 344" stroke="#38bdf8" stroke-width="16" stroke-linecap="round"/>
+  <!-- Success Verification Badge -->
+  <circle cx="368" cy="368" r="48" fill="#10b981"/>
+  <path d="M348 368L362 382L390 354" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
