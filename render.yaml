@@ -14,29 +14,10 @@ services:
       - key: ENV
         value: production
       - key: CORS_ORIGINS
-        value: "*"
+        value: "https://ai--based-smart-attendance.web.app,https://ai--based-smart-attendance.firebaseapp.com,http://localhost:3000"
       - key: FACE_MATCH_THRESHOLD
         value: "0.65"
       - key: MIN_MATCH_MARGIN
         value: "0.08"
       - key: REQUIRED_CONSECUTIVE_MATCHES
         value: "2"
-
-  # React / Vite SPA Frontend
-  - type: web
-    name: ai-attendance-frontend
-    runtime: static
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: ./frontend/dist
-    plan: free
-    region: oregon
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_BASE_URL
-        fromService:
-          type: web
-          name: ai-attendance-backend
-          property: host
