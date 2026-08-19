@@ -8,21 +8,8 @@ const API = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 60000, // 60s timeout to gracefully accommodate cloud cold starts (Render free tier spin-up)
+  timeout: 60000, // 60s timeout to gracefully accommodate cloud cold starts
 });
-
-// Lightweight client-side memory cache for static reference data
-const cache = {
-  classes: null,
-  subjects: {},
-  teachers: null,
-};
-
-export const clearCache = () => {
-  cache.classes = null;
-  cache.subjects = {};
-  cache.teachers = null;
-};
 
 // Automatic pre-warming ping for cloud instances
 export const wakeUpBackend = async () => {
@@ -43,11 +30,29 @@ export const authAPI = {
   wakeUp: wakeUpBackend,
 };
 
+export const dashboardAPI = {
+  getAdminMetrics: () => API.get('/dashboard/admin'),
+  getTeacherMetrics: (teacherId) => API.get(`/dashboard/teacher/${teacherId}`),
+};
+
+export const academicAPI = {
+  listYears: () => API.get('/academic/years'),
+  createYear: (data) => API.post('/academic/years', data),
+  deleteYear: (id) => API.delete(`/academic/years/${id}`),
+  listDepartments: () => API.get('/academic/departments'),
+  createDepartment: (data) => API.post('/academic/departments', data),
+  deleteDepartment: (id) => API.delete(`/academic/departments/${id}`),
+  listPrograms: () => API.get('/academic/programs'),
+  createProgram: (data) => API.post('/academic/programs', data),
+  deleteProgram: (id) => API.delete(`/academic/programs/${id}`),
+};
+
 export const studentAPI = {
   create: (data) => API.post('/students', data),
-  list: (classId) => API.get('/students', { params: { class_id: classId } }),
+  list: (params) => API.get('/students', { params: typeof params === 'string' ? { class_id: params } : params }),
   get: (id) => API.get(`/students/${id}`),
   update: (id, data) => API.put(`/students/${id}`, data),
+  transfer: (id, data) => API.put(`/students/${id}/transfer`, data),
   updateProfile: (id, data) => API.put(`/students/${id}/profile`, data),
   uploadDocument: (id, data) => API.post(`/students/${id}/upload-document`, data),
   deleteDocument: (id, docType) => API.delete(`/students/${id}/documents/${docType}`),
@@ -58,57 +63,33 @@ export const studentAPI = {
 };
 
 export const teacherAPI = {
-  create: async (data) => {
-    const res = await API.post('/teachers', data);
-    cache.teachers = null;
-    return res;
-  },
-  list: async () => {
-    if (cache.teachers) return { data: cache.teachers };
-    const res = await API.get('/teachers');
-    cache.teachers = res.data;
-    return res;
-  },
+  create: (data) => API.post('/teachers', data),
+  list: () => API.get('/teachers'),
   get: (id) => API.get(`/teachers/${id}`),
+  getClasses: (teacherId) => API.get(`/teachers/${teacherId}/classes`),
+  getSubjects: (teacherId) => API.get(`/teachers/${teacherId}/subjects`),
   updateProfile: (id, data) => API.put(`/teachers/${id}/profile`, data),
   delete: (id) => API.delete(`/teachers/${id}`),
 };
 
 export const classAPI = {
-  create: async (data) => {
-    const res = await API.post('/classes', data);
-    cache.classes = null;
-    return res;
-  },
-  list: async () => {
-    if (cache.classes) return { data: cache.classes };
-    const res = await API.get('/classes');
-    cache.classes = res.data;
-    return res;
-  },
+  create: (data) => API.post('/classes', data),
+  list: (params) => API.get('/classes', { params }),
+  getStudents: (classId) => API.get(`/classes/${classId}/students`),
   update: (id, data) => API.put(`/classes/${id}`, data),
   delete: (id) => API.delete(`/classes/${id}`),
 };
 
 export const subjectAPI = {
-  create: async (data) => {
-    const res = await API.post('/subjects', data);
-    cache.subjects = {};
-    return res;
-  },
-  list: async (classId) => {
-    const key = classId || 'all';
-    if (cache.subjects[key]) return { data: cache.subjects[key] };
-    const res = await API.get('/subjects', { params: { class_id: classId } });
-    cache.subjects[key] = res.data;
-    return res;
-  },
+  create: (data) => API.post('/subjects', data),
+  list: (params) => API.get('/subjects', { params: typeof params === 'string' ? { class_id: params } : params }),
   update: (id, data) => API.put(`/subjects/${id}`, data),
   delete: (id) => API.delete(`/subjects/${id}`),
 };
 
 export const attendanceAPI = {
-  startSession: (classId, subjectId, teacherId) => API.post('/attendance/session', { classId, subjectId, teacherId }),
+  startSession: (classId, subjectId, teacherId, academicContext = {}) => 
+    API.post('/attendance/session', { classId, subjectId, teacherId, ...academicContext }),
   closeSession: (sessionId) => API.post(`/attendance/session/${sessionId}/close`),
   recognizeFrame: (sessionId, frameBase64, blinkCount = 0) => API.post('/attendance/recognize', { sessionId, frame: frameBase64, consecutiveBlinkCount: blinkCount }),
   recognizeMultiFrame: (sessionId, frameBase64, blinkCount = 0) => API.post('/attendance/recognize-multi', { sessionId, frame: frameBase64, consecutiveBlinkCount: blinkCount }),
@@ -122,6 +103,7 @@ export const attendanceAPI = {
 
 export const reportAPI = {
   getStudentSummary: (studentId) => API.get(`/reports/student/${studentId}/summary`),
+  getDefaulters: (classId, threshold = 75.0) => API.get('/reports/defaulters', { params: { class_id: classId, threshold } }),
   getExportCSVUrl: (classId, subjectId) => {
     let url = `${API_BASE}/api/v1/reports/export/csv`;
     const params = [];

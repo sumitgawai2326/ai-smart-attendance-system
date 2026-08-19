@@ -6,7 +6,7 @@ import uvicorn
 
 from app.config.settings import settings
 from app.firebase.client import init_firebase
-from app.api import auth, students, teachers, classes, subjects, attendance, reports
+from app.api import auth, students, teachers, classes, subjects, attendance, reports, academic, dashboard
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,6 +35,8 @@ app.add_middleware(
 
 # Register API Routers
 app.include_router(auth.router, prefix=settings.API_PREFIX)
+app.include_router(academic.router, prefix=settings.API_PREFIX)
+app.include_router(dashboard.router, prefix=settings.API_PREFIX)
 app.include_router(students.router, prefix=settings.API_PREFIX)
 app.include_router(teachers.router, prefix=settings.API_PREFIX)
 app.include_router(classes.router, prefix=settings.API_PREFIX)

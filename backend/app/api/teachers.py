@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 from typing import List, Dict, Any
 import uuid
 from datetime import datetime, timezone
-from app.models.schemas import TeacherCreate, TeacherResponse, TeacherProfileUpdate
+from app.models.schemas import TeacherCreate, TeacherResponse, TeacherProfileUpdate, ClassResponse, SubjectResponse
 from app.firebase.client import get_db
 
 router = APIRouter(prefix="/teachers", tags=["Teachers"])
@@ -21,7 +21,7 @@ def format_teacher_response(d: Dict[str, Any]) -> Dict[str, Any]:
         "cabin": d.get("cabin", "Lab 402, Department Block"),
         "officeHours": d.get("officeHours", "Mon - Fri: 2:00 PM - 4:00 PM"),
         "experienceYears": d.get("experienceYears", "8+ Years"),
-        "assignedClasses": d.get("assignedClasses", ["CLS-AIDS-3A"]),
+        "assignedClasses": d.get("assignedClasses", ["CLS-AIDS-AI2"]),
         "createdAt": d.get("createdAt")
     }
 
@@ -50,7 +50,7 @@ def create_teacher(t_in: TeacherCreate):
         "cabin": t_in.cabin or "Block B, Room 304",
         "officeHours": t_in.officeHours or "Mon-Fri: 2PM-4PM",
         "experienceYears": t_in.experienceYears or "5 Years",
-        "assignedClasses": t_in.assignedClasses or ["CLS-AIDS-3A"],
+        "assignedClasses": t_in.assignedClasses or ["CLS-AIDS-AI2"],
         "createdAt": now_iso
     }
     db.collection("teachers").document(teacher_id).set(t_data)
@@ -73,7 +73,6 @@ def list_teachers():
     teachers = [format_teacher_response(d.to_dict()) for d in docs]
     
     if len(teachers) == 0:
-        # Auto-seed default faculty teacher
         default_tch = {
             "id": "USR-TEACHER-01",
             "name": "Prof. Alan Turing",
@@ -87,7 +86,7 @@ def list_teachers():
             "cabin": "Faculty Block C, Cabin 402",
             "officeHours": "Mon-Fri: 11:00 AM - 1:00 PM",
             "experienceYears": "12+ Years",
-            "assignedClasses": ["CLS-AIDS-3A"],
+            "assignedClasses": ["CLS-AIDS-AI2"],
             "createdAt": datetime.now(timezone.utc).isoformat()
         }
         db.collection("teachers").document(default_tch["id"]).set(default_tch)
@@ -100,16 +99,50 @@ def get_teacher(teacher_id: str):
     db = get_db()
     doc = db.collection("teachers").document(teacher_id).get()
     if not doc.exists:
-        # Try finding by email
         by_email = db.collection("teachers").where("email", "==", teacher_id).get()
         if len(by_email) > 0:
             return format_teacher_response(by_email[0].to_dict())
         raise HTTPException(status_code=404, detail="Teacher profile not found")
     return format_teacher_response(doc.to_dict())
 
+@router.get("/{teacher_id}/classes")
+def get_teacher_classes(teacher_id: str):
+    """Returns only classes assigned to this teacher"""
+    db = get_db()
+    tdoc = db.collection("teachers").document(teacher_id).get()
+    if not tdoc.exists:
+        by_email = db.collection("teachers").where("email", "==", teacher_id).get()
+        if len(by_email) > 0:
+            tdoc = by_email[0]
+        else:
+            raise HTTPException(status_code=404, detail="Teacher not found")
+
+    t_data = tdoc.to_dict()
+    assigned_ids = t_data.get("assignedClasses", [])
+    classes = []
+    for cid in assigned_ids:
+        cdoc = db.collection("classes").document(cid).get()
+        if cdoc.exists:
+            classes.append(cdoc.to_dict())
+        else:
+            classes.append({"id": cid, "name": cid, "department": t_data.get("department", "AI & DS"), "year": "2nd Year", "division": "AI-2"})
+    return classes
+
+@router.get("/{teacher_id}/subjects")
+def get_teacher_subjects(teacher_id: str):
+    """Returns only subjects assigned to this teacher"""
+    db = get_db()
+    docs = db.collection("subjects").where("teacherId", "==", teacher_id).get()
+    subjs = [d.to_dict() for d in docs]
+    if len(subjs) == 0:
+        # Check by default teacher ID
+        fallback = db.collection("subjects").where("teacherId", "==", "USR-TEACHER-01").get()
+        subjs = [d.to_dict() for d in fallback]
+    return subjs
+
+@router.put("/{teacher_id}", response_model=TeacherResponse)
 @router.put("/{teacher_id}/profile", response_model=TeacherResponse)
 def update_teacher_profile(teacher_id: str, profile_in: TeacherProfileUpdate):
-    """Teacher Self-Service Profile Update"""
     db = get_db()
     doc_ref = db.collection("teachers").document(teacher_id)
     doc = doc_ref.get()
@@ -141,7 +174,6 @@ def update_teacher_profile(teacher_id: str, profile_in: TeacherProfileUpdate):
 
 @router.delete("/{teacher_id}")
 def delete_teacher(teacher_id: str):
-    """Delete teacher record and user credentials"""
     db = get_db()
     doc_ref = db.collection("teachers").document(teacher_id)
     if not doc_ref.get().exists:

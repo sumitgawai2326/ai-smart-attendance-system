@@ -46,15 +46,54 @@ class ResetPasswordRequest(BaseModel):
     otp: str
     newPassword: str
 
+# --- Academic Hierarchy Schemas ---
+class AcademicYearCreate(BaseModel):
+    year: str # e.g. "2026-27"
+    isCurrent: bool = True
+
+class AcademicYearResponse(BaseModel):
+    id: str
+    year: str
+    isCurrent: bool = True
+    createdAt: Optional[str] = None
+
+class DepartmentCreate(BaseModel):
+    code: str # e.g. "AIDS"
+    name: str # e.g. "Artificial Intelligence & Data Science"
+
+class DepartmentResponse(BaseModel):
+    id: str
+    code: str
+    name: str
+    createdAt: Optional[str] = None
+
+class ProgramCreate(BaseModel):
+    code: str # e.g. "BTECH-AIDS"
+    name: str # e.g. "B.Tech in Artificial Intelligence & Data Science"
+    department: str # e.g. "AI & Data Science"
+    durationYears: int = 4
+
+class ProgramResponse(BaseModel):
+    id: str
+    code: str
+    name: str
+    department: str
+    durationYears: int = 4
+    createdAt: Optional[str] = None
+
 # --- Student Schemas ---
 class StudentCreate(BaseModel):
     rollNumber: str
     name: str
     email: EmailStr
     classId: str
-    division: Optional[str] = "A"
-    branch: str = "AI & DS"
-    year: str = "3rd Year"
+    academicYear: Optional[str] = "2026-27"
+    department: Optional[str] = "AI & Data Science"
+    program: Optional[str] = "B.Tech AI & Data Science"
+    year: Optional[str] = "2nd Year"
+    semester: Optional[str] = "Semester III"
+    division: Optional[str] = "AI-2"
+    branch: Optional[str] = "AI & Data Science"
     phone: Optional[str] = None
     prnNumber: Optional[str] = None
 
@@ -68,13 +107,23 @@ class StudentProfileUpdate(BaseModel):
     dob: Optional[str] = None
     gender: Optional[str] = None
     bloodGroup: Optional[str] = None
-    branch: Optional[str] = None
+    academicYear: Optional[str] = None
+    department: Optional[str] = None
+    program: Optional[str] = None
     year: Optional[str] = None
+    semester: Optional[str] = None
     division: Optional[str] = None
+    branch: Optional[str] = None
     guardianName: Optional[str] = None
     guardianPhone: Optional[str] = None
     address: Optional[str] = None
     emergencyContact: Optional[str] = None
+
+class StudentTransferRequest(BaseModel):
+    newClassId: str
+    newDivision: Optional[str] = None
+    newSemester: Optional[str] = None
+    newYear: Optional[str] = None
 
 class DocumentUploadRequest(BaseModel):
     documentType: str  # e.g., 'collegeId', 'aadhaarCard', 'marksheet', 'feeReceipt', 'other'
@@ -90,9 +139,13 @@ class StudentResponse(BaseModel):
     name: str
     email: str
     classId: str
-    division: Optional[str] = "A"
-    branch: str = "AI & DS"
-    year: str = "3rd Year"
+    academicYear: Optional[str] = "2026-27"
+    department: Optional[str] = "AI & Data Science"
+    program: Optional[str] = "B.Tech AI & Data Science"
+    year: Optional[str] = "2nd Year"
+    semester: Optional[str] = "Semester III"
+    division: Optional[str] = "AI-2"
+    branch: Optional[str] = "AI & Data Science"
     prnNumber: Optional[str] = None
     phone: Optional[str] = None
     whatsapp: Optional[str] = None
@@ -160,37 +213,49 @@ class TeacherResponse(BaseModel):
 
 # --- Class & Subject Schemas ---
 class ClassCreate(BaseModel):
-    name: str
-    department: str
-    year: str
-    division: str
+    name: str # e.g. "B.Tech AI & DS - 2nd Year (Div AI-2)"
+    department: str # e.g. "AI & Data Science"
+    program: Optional[str] = "B.Tech AI & Data Science"
+    academicYear: Optional[str] = "2026-27"
+    year: str # e.g. "2nd Year"
+    semester: Optional[str] = "Semester III"
+    division: str # e.g. "AI-2"
 
 class ClassResponse(ClassCreate):
     id: str
+    createdAt: Optional[str] = None
 
 class SubjectCreate(BaseModel):
     code: str
     name: str
     classId: str
-    teacherId: str
+    teacherId: Optional[str] = None
+    semester: Optional[str] = "Semester III"
 
 class SubjectResponse(SubjectCreate):
     id: str
+    createdAt: Optional[str] = None
 
+# --- Manual & Session Schemas ---
 class ManualAttendanceSubmitRequest(BaseModel):
     classId: str
     subjectId: str
     teacherId: str
     date: str
+    academicYear: Optional[str] = "2026-27"
+    semester: Optional[str] = "Semester III"
+    division: Optional[str] = "AI-2"
     timeSlot: Optional[str] = "10:00 AM - 11:00 AM"
     topicCovered: Optional[str] = ""
     records: List[Dict[str, Any]]
 
-# --- Attendance Session & Record Schemas ---
 class SessionCreate(BaseModel):
     classId: str
     subjectId: str
     teacherId: str
+    academicYear: Optional[str] = "2026-27"
+    semester: Optional[str] = "Semester III"
+    division: Optional[str] = "AI-2"
 
 class SessionResponse(BaseModel):
     id: str
@@ -247,3 +312,22 @@ class AttendanceRecordResponse(BaseModel):
     method: str
     markedBy: str
     timestamp: str
+
+# --- Dashboard Unified Metrics Schemas ---
+class AdminDashboardMetrics(BaseModel):
+    totalStudents: int
+    totalEnrolledFaces: int
+    totalTeachers: int
+    totalClasses: int
+    totalSubjects: int
+    totalAttendanceSessions: int
+    overallAttendancePercentage: float
+
+class TeacherDashboardMetrics(BaseModel):
+    teacherId: str
+    assignedClasses: List[Dict[str, Any]]
+    assignedSubjects: List[Dict[str, Any]]
+    enrolledStudentsCount: int
+    averageAttendancePercentage: float
+    totalSessionsConducted: int
+    students: List[StudentResponse]

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, Query, Response, HTTPException
 from typing import Optional, List, Dict, Any
 import csv
 import io
@@ -9,56 +9,45 @@ router = APIRouter(prefix="/reports", tags=["Reports & Analytics"])
 @router.get("/student/{student_id}/summary")
 def get_student_attendance_summary(student_id: str):
     """
-    Subject-wise attendance summary, overall %, and recent history for Student Dashboard.
+    Authoritative student attendance summary.
+    Calculates exact live metrics directly from attendance_records and attendance_sessions in the database.
     """
     db = get_db()
     
     # 1. Fetch student info
     student_doc = db.collection("students").document(student_id).get()
     if not student_doc.exists:
-        # Fallback default student mock data if seed user
-        student_data = {"id": student_id, "name": "Rahul Patil", "rollNumber": "24", "classId": "CLS-AIDS-3A"}
-    else:
-        student_data = student_doc.to_dict()
+        by_email = db.collection("students").where("email", "==", student_id).get()
+        if len(by_email) > 0:
+            student_doc = by_email[0]
+        else:
+            raise HTTPException(status_code=404, detail="Student not found")
 
-    class_id = student_data.get("classId", "CLS-AIDS-3A")
+    student_data = student_doc.to_dict()
+    real_student_id = student_doc.id
+    class_id = student_data.get("classId")
 
-    # 2. Fetch all subjects for this class
-    subjects_docs = db.collection("subjects").where("classId", "==", class_id).get()
+    # 2. Fetch subjects for this student's class
+    subjects_docs = db.collection("subjects").where("classId", "==", class_id).get() if class_id else []
     subjects = [s.to_dict() for s in subjects_docs]
     if len(subjects) == 0:
-        subjects = [
-            {"id": "SBJ-DSA", "code": "CS301", "name": "Data Structures & Algorithms"},
-            {"id": "SBJ-DBMS", "code": "CS302", "name": "Database Management Systems"},
-            {"id": "SBJ-AI", "code": "AI303", "name": "Artificial Intelligence & ML"}
-        ]
+        subjects = [s.to_dict() for s in db.collection("subjects").get()]
 
-    # 3. Fetch attendance records for this student
-    records_docs = db.collection("attendance_records").where("studentId", "==", student_id).get()
+    # 3. Fetch actual attendance records for this student
+    records_docs = db.collection("attendance_records").where("studentId", "==", real_student_id).get()
     student_records = [r.to_dict() for r in records_docs]
 
-    # Calculate subject breakdown
     subject_stats = []
     total_conducted_all = 0
     total_attended_all = 0
 
     for subj in subjects:
-        subj_id = subj["id"]
-        # Find sessions conducted for this subject
+        subj_id = subj.get("id")
         sessions_docs = db.collection("attendance_sessions").where("subjectId", "==", subj_id).get()
         total_sessions = len(sessions_docs)
-        if total_sessions == 0:
-            total_sessions = 20  # Default base conducted total for demo analytics if no sessions closed yet
 
         attended_count = len([r for r in student_records if r.get("subjectId") == subj_id and r.get("status") == "PRESENT"])
-        if len(student_records) == 0:
-            # Seed standard historical counts for demo preview
-            if subj_id == "SBJ-DSA": attended_count = 18
-            elif subj_id == "SBJ-DBMS": attended_count = 16
-            elif subj_id == "SBJ-AI": attended_count = 19
-            else: attended_count = 17
-
-        percentage = round((attended_count / total_sessions) * 100, 1) if total_sessions > 0 else 100.0
+        percentage = round((attended_count / total_sessions) * 100, 1) if total_sessions > 0 else 0.0
 
         subject_stats.append({
             "subjectId": subj_id,
@@ -72,32 +61,61 @@ def get_student_attendance_summary(student_id: str):
         total_conducted_all += total_sessions
         total_attended_all += attended_count
 
-    overall_percentage = round((total_attended_all / total_conducted_all) * 100, 1) if total_conducted_all > 0 else 100.0
+    overall_percentage = round((total_attended_all / total_conducted_all) * 100, 1) if total_conducted_all > 0 else 0.0
 
     return {
         "student": {
-            "id": student_data.get("id"),
+            "id": real_student_id,
             "name": student_data.get("name"),
             "rollNumber": student_data.get("rollNumber"),
-            "classId": class_id
+            "classId": class_id,
+            "department": student_data.get("department", "AI & Data Science"),
+            "division": student_data.get("division", "AI-2")
         },
         "overallPercentage": overall_percentage,
         "totalAttended": total_attended_all,
         "totalConducted": total_conducted_all,
-        "isLowAttendance": overall_percentage < 75.0,
+        "isLowAttendance": overall_percentage < 75.0 and total_conducted_all > 0,
         "subjectStats": subject_stats,
-        "recentRecords": student_records[:10]
+        "recentRecords": student_records[:15]
     }
+
+@router.get("/defaulters")
+def get_defaulters_list(class_id: Optional[str] = None, threshold: float = 75.0):
+    """
+    Returns list of students with attendance below threshold (default 75%).
+    """
+    db = get_db()
+    st_ref = db.collection("students")
+    st_docs = st_ref.where("classId", "==", class_id).get() if class_id else st_ref.get()
+
+    defaulters = []
+    for s_doc in st_docs:
+        s_data = s_doc.to_dict()
+        sid = s_doc.id
+        summary = get_student_attendance_summary(sid)
+        if summary.get("totalConducted", 0) > 0 and summary.get("overallPercentage", 0.0) < threshold:
+            defaulters.append({
+                "studentId": sid,
+                "name": s_data.get("name"),
+                "rollNumber": s_data.get("rollNumber"),
+                "email": s_data.get("email"),
+                "classId": s_data.get("classId"),
+                "attendancePercentage": summary.get("overallPercentage"),
+                "attended": summary.get("totalAttended"),
+                "conducted": summary.get("totalConducted")
+            })
+
+    return defaulters
 
 @router.get("/export/csv")
 def export_attendance_csv(class_id: Optional[str] = None, subject_id: Optional[str] = None):
-    """
-    Generate & download CSV report containing real Firestore attendance records.
-    """
     db = get_db()
     ref = db.collection("attendance_records")
     
-    if class_id:
+    if class_id and subject_id:
+        docs = ref.where("classId", "==", class_id).where("subjectId", "==", subject_id).get()
+    elif class_id:
         docs = ref.where("classId", "==", class_id).get()
     else:
         docs = ref.get()

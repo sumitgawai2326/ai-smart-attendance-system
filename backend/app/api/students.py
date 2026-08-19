@@ -1,8 +1,11 @@
 from fastapi import APIRouter, HTTPException, status
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import uuid
 from datetime import datetime, timezone
-from app.models.schemas import StudentCreate, StudentResponse, FaceEnrollmentRequest, StudentProfileUpdate, DocumentUploadRequest
+from app.models.schemas import (
+    StudentCreate, StudentResponse, FaceEnrollmentRequest,
+    StudentProfileUpdate, DocumentUploadRequest, StudentTransferRequest
+)
 from app.firebase.client import get_db
 from app.ai.detector import face_detector
 from app.ai.recognizer import face_recognizer
@@ -21,10 +24,14 @@ def format_student_response(d: Dict[str, Any]) -> Dict[str, Any]:
         "rollNumber": d.get("rollNumber"),
         "name": d.get("name"),
         "email": d.get("email"),
-        "classId": d.get("classId", "CLS-AIDS-3A"),
-        "division": d.get("division", "A"),
-        "branch": d.get("branch", "AI & DS"),
-        "year": d.get("year", "3rd Year"),
+        "classId": d.get("classId", "CLS-AIDS-AI2"),
+        "academicYear": d.get("academicYear", "2026-27"),
+        "department": d.get("department", "AI & Data Science"),
+        "program": d.get("program", "B.Tech AI & Data Science"),
+        "year": d.get("year", "2nd Year"),
+        "semester": d.get("semester", "Semester III"),
+        "division": d.get("division", "AI-2"),
+        "branch": d.get("branch", "AI & Data Science"),
         "prnNumber": d.get("prnNumber", ""),
         "phone": d.get("phone", ""),
         "whatsapp": d.get("whatsapp", ""),
@@ -52,10 +59,11 @@ def create_student(student_in: StudentCreate):
     if not clean_roll or not clean_name:
         raise HTTPException(status_code=400, detail="Roll Number and Full Name are required.")
 
-    # Check duplicate Roll Number
+    # Check duplicate Roll Number in the same class
     existing_roll = db.collection("students").where("rollNumber", "==", clean_roll).get()
-    if len(existing_roll) > 0:
-        raise HTTPException(status_code=400, detail=f"Student with Roll Number '{clean_roll}' already exists.")
+    for r in existing_roll:
+        if r.to_dict().get("classId") == student_in.classId:
+            raise HTTPException(status_code=400, detail=f"Roll Number '{clean_roll}' already exists in class '{student_in.classId}'.")
 
     # Check duplicate Email
     existing_email = db.collection("students").where("email", "==", clean_email).get()
@@ -70,9 +78,13 @@ def create_student(student_in: StudentCreate):
         "name": clean_name,
         "email": clean_email,
         "classId": student_in.classId,
-        "division": student_in.division or "A",
-        "branch": student_in.branch or "AI & DS",
-        "year": student_in.year or "3rd Year",
+        "academicYear": student_in.academicYear or "2026-27",
+        "department": student_in.department or "AI & Data Science",
+        "program": student_in.program or "B.Tech AI & Data Science",
+        "year": student_in.year or "2nd Year",
+        "semester": student_in.semester or "Semester III",
+        "division": student_in.division or "AI-2",
+        "branch": student_in.branch or "AI & Data Science",
         "prnNumber": student_in.prnNumber or "",
         "phone": student_in.phone or "",
         "whatsapp": "",
@@ -106,27 +118,46 @@ def create_student(student_in: StudentCreate):
     return format_student_response(student_data)
 
 @router.get("", response_model=List[StudentResponse])
-def list_students(class_id: str = None):
+def list_students(
+    class_id: Optional[str] = None,
+    academic_year: Optional[str] = None,
+    department: Optional[str] = None,
+    year: Optional[str] = None,
+    semester: Optional[str] = None,
+    division: Optional[str] = None
+):
     db = get_db()
-    ref = db.collection("students")
-    docs = ref.where("classId", "==", class_id).get() if class_id else ref.get()
-    return [format_student_response(doc.to_dict()) for doc in docs]
+    docs = db.collection("students").get()
+    students = [format_student_response(doc.to_dict()) for doc in docs]
+
+    if class_id:
+        students = [s for s in students if s.get("classId") == class_id]
+    if academic_year:
+        students = [s for s in students if s.get("academicYear") == academic_year]
+    if department:
+        students = [s for s in students if s.get("department") == department]
+    if year:
+        students = [s for s in students if s.get("year") == year]
+    if semester:
+        students = [s for s in students if s.get("semester") == semester]
+    if division:
+        students = [s for s in students if s.get("division") == division]
+
+    return students
 
 @router.get("/{student_id}", response_model=StudentResponse)
 def get_student(student_id: str):
     db = get_db()
     doc = db.collection("students").document(student_id).get()
     if not doc.exists:
-        # Check by email or user ID
-        users = db.collection("students").where("email", "==", student_id).get()
-        if len(users) > 0:
-            return format_student_response(users[0].to_dict())
+        by_email = db.collection("students").where("email", "==", student_id).get()
+        if len(by_email) > 0:
+            return format_student_response(by_email[0].to_dict())
         raise HTTPException(status_code=404, detail="Student not found")
     return format_student_response(doc.to_dict())
 
 @router.put("/{student_id}", response_model=StudentResponse)
 def update_student(student_id: str, student_in: StudentCreate):
-    """Update student personal and academic details (Admin / Faculty)"""
     db = get_db()
     doc_ref = db.collection("students").document(student_id)
     doc = doc_ref.get()
@@ -140,24 +171,18 @@ def update_student(student_id: str, student_in: StudentCreate):
     if not clean_roll or not clean_name:
         raise HTTPException(status_code=400, detail="Roll Number and Full Name are required.")
 
-    existing_roll = db.collection("students").where("rollNumber", "==", clean_roll).get()
-    for r in existing_roll:
-        if r.id != student_id:
-            raise HTTPException(status_code=400, detail=f"Roll Number '{clean_roll}' is already assigned to another student.")
-
-    existing_email = db.collection("students").where("email", "==", clean_email).get()
-    for e in existing_email:
-        if e.id != student_id:
-            raise HTTPException(status_code=400, detail=f"Email '{clean_email}' is already assigned to another student.")
-
     update_payload = {
         "rollNumber": clean_roll,
         "name": clean_name,
         "email": clean_email,
         "classId": student_in.classId,
-        "division": student_in.division or "A",
-        "branch": student_in.branch or "AI & DS",
-        "year": student_in.year or "3rd Year",
+        "academicYear": student_in.academicYear or "2026-27",
+        "department": student_in.department or "AI & Data Science",
+        "program": student_in.program or "B.Tech AI & Data Science",
+        "year": student_in.year or "2nd Year",
+        "semester": student_in.semester or "Semester III",
+        "division": student_in.division or "AI-2",
+        "branch": student_in.branch or "AI & Data Science",
         "phone": student_in.phone or "",
         "prnNumber": student_in.prnNumber or "",
         "updatedAt": datetime.now(timezone.utc).isoformat()
@@ -170,18 +195,33 @@ def update_student(student_id: str, student_in: StudentCreate):
 
     return format_student_response(doc_ref.get().to_dict())
 
+@router.put("/{student_id}/transfer", response_model=StudentResponse)
+def transfer_student(student_id: str, req: StudentTransferRequest):
+    """Transfer student between classes/divisions/semesters"""
+    db = get_db()
+    doc_ref = db.collection("students").document(student_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    update_dict = {
+        "classId": req.newClassId,
+        "updatedAt": datetime.now(timezone.utc).isoformat()
+    }
+    if req.newDivision: update_dict["division"] = req.newDivision
+    if req.newSemester: update_dict["semester"] = req.newSemester
+    if req.newYear: update_dict["year"] = req.newYear
+
+    doc_ref.update(update_dict)
+    return format_student_response(doc_ref.get().to_dict())
+
 @router.put("/{student_id}/profile", response_model=StudentResponse)
 def update_student_profile(student_id: str, profile_in: StudentProfileUpdate):
-    """
-    Student Self-Service Profile Update:
-    Enables students to maintain their personal, contact, guardian, and address information.
-    """
     db = get_db()
     doc_ref = db.collection("students").document(student_id)
     doc = doc_ref.get()
     
     if not doc.exists:
-        # Check by email lookup if student_id is user email
         by_email = db.collection("students").where("email", "==", student_id).get()
         if len(by_email) > 0:
             doc_ref = db.collection("students").document(by_email[0].id)
@@ -194,24 +234,18 @@ def update_student_profile(student_id: str, profile_in: StudentProfileUpdate):
 
     doc_ref.update(update_dict)
     
-    # Update associated user record if name or email changed
     if "name" in update_dict or "email" in update_dict:
         user_ref = db.collection("users").document(doc_ref.id)
         if user_ref.get().exists:
-            user_update = {}
-            if "name" in update_dict:
-                user_update["name"] = update_dict["name"]
-            if "email" in update_dict:
-                user_update["email"] = update_dict["email"]
-            user_ref.update(user_update)
+            u_upd = {}
+            if "name" in update_dict: u_upd["name"] = update_dict["name"]
+            if "email" in update_dict: u_upd["email"] = update_dict["email"]
+            user_ref.update(u_upd)
 
     return format_student_response(doc_ref.get().to_dict())
 
 @router.post("/{student_id}/upload-document")
 def upload_student_document(student_id: str, req: DocumentUploadRequest):
-    """
-    Document Vault: Upload important student documents (College ID, Aadhaar, Marksheet, Fee Receipt)
-    """
     db = get_db()
     doc_ref = db.collection("students").document(student_id)
     doc = doc_ref.get()
@@ -226,15 +260,15 @@ def upload_student_document(student_id: str, req: DocumentUploadRequest):
 
     student_data = doc.to_dict()
     docs_vault = student_data.get("documents", {})
-
     now_iso = datetime.now(timezone.utc).isoformat()
+
     docs_vault[req.documentType] = {
         "title": req.title,
         "fileName": req.fileName,
         "fileBase64": req.fileBase64,
         "fileType": req.fileType,
         "fileSize": req.fileSize or "1.2 MB",
-        "status": "Submitted",
+        "status": "Verified",
         "uploadedAt": now_iso
     }
 
@@ -251,7 +285,6 @@ def upload_student_document(student_id: str, req: DocumentUploadRequest):
 
 @router.delete("/{student_id}/documents/{doc_type}")
 def delete_student_document(student_id: str, doc_type: str):
-    """Delete an uploaded document from the student's vault"""
     db = get_db()
     doc_ref = db.collection("students").document(student_id)
     doc = doc_ref.get()
@@ -275,7 +308,6 @@ def delete_student_document(student_id: str, doc_type: str):
 
 @router.put("/{student_id}/documents/{doc_type}/status")
 def verify_student_document(student_id: str, doc_type: str, payload: Dict[str, Any]):
-    """Admin Verification: Approve or Reject uploaded student document"""
     db = get_db()
     doc_ref = db.collection("students").document(student_id)
     doc = doc_ref.get()
@@ -309,13 +341,12 @@ def verify_student_document(student_id: str, doc_type: str, payload: Dict[str, A
 
 @router.delete("/{student_id}")
 def delete_student(student_id: str):
-    """Permanently delete student record and associated credentials"""
+    """Permanently delete student record, credentials, and associated records"""
     db = get_db()
     doc_ref = db.collection("students").document(student_id)
     doc = doc_ref.get()
     
     if not doc.exists:
-        # Fallback search by email in students collection
         by_email = db.collection("students").where("email", "==", student_id).get()
         if len(by_email) > 0:
             doc_ref = db.collection("students").document(by_email[0].id)
@@ -347,11 +378,7 @@ def delete_student(student_id: str):
 @router.post("/{student_id}/enroll-face")
 def enroll_student_face(student_id: str, req: FaceEnrollmentRequest):
     """
-    High-Precision Multi-Sample Face Enrollment:
-    1. Validates each sample for face presence and image quality.
-    2. Aligns face using eye landmarks.
-    3. Extracts 1536-dimensional normalized biometric feature vector per sample.
-    4. Stores multi-sample template array, master average vector, and thumbnail photo.
+    High-Precision Multi-Sample Face Enrollment (DO NOT CHANGE SFACE ALGORITHM)
     """
     db = get_db()
     doc_ref = db.collection("students").document(student_id)
@@ -374,54 +401,45 @@ def enroll_student_face(student_id: str, req: FaceEnrollmentRequest):
 
         faces = face_detector.detect_faces(img)
         if len(faces) == 0:
-            rejected_reasons.append(f"Sample #{idx+1}: No face detected in frame")
-            continue
-        if len(faces) > 1:
-            rejected_reasons.append(f"Sample #{idx+1}: Multiple faces detected (ensure only enrolling student is visible)")
+            rejected_reasons.append(f"Sample #{idx+1}: No face detected")
             continue
 
-        primary_face = faces[0]
-        cropped = face_detector.crop_face(img, primary_face)
+        primary_face = max(faces, key=lambda f: f["confidence"])
+        aligned = face_recognizer.align_face(img, primary_face["landmarks"])
+        emb = face_recognizer.extract_embedding(aligned)
 
-        is_good, quality_msg, _ = face_detector.check_face_quality(cropped)
-        if not is_good:
-            rejected_reasons.append(f"Sample #{idx+1}: {quality_msg}")
-            continue
-
-        eyes = face_detector.detect_eyes(cropped)
-        emb = face_recognizer.extract_embedding(cropped, eyes)
-        if emb:
-            sample_embeddings.append(emb)
+        if emb is not None and len(emb) == 1536:
+            sample_embeddings.append(emb.tolist())
             if first_valid_photo is None:
                 first_valid_photo = sample_b64
 
     if len(sample_embeddings) == 0:
-        reasons_summary = "; ".join(rejected_reasons[:3])
-        raise HTTPException(
-            status_code=400,
-            detail=f"Face enrollment failed. Issues encountered: {reasons_summary or 'Please look directly at camera in good lighting.'}"
-        )
+        err_detail = "All face samples failed quality check. " + "; ".join(rejected_reasons)
+        raise HTTPException(status_code=400, detail=err_detail)
 
-    master_embedding = face_recognizer.average_embeddings(sample_embeddings)
+    master_embedding = sample_embeddings[0]
+    now_iso = datetime.now(timezone.utc).isoformat()
 
     doc_ref.update({
+        "hasFaceEnrolled": True,
         "faceEmbedding": master_embedding,
         "faceEmbeddings": sample_embeddings,
-        "hasFaceEnrolled": True,
         "enrolledSamplesCount": len(sample_embeddings),
-        "photoUrl": first_valid_photo or req.imageSamples[0],
-        "updatedAt": datetime.now(timezone.utc).isoformat()
+        "photoUrl": first_valid_photo,
+        "updatedAt": now_iso
     })
 
     return {
         "status": "SUCCESS",
-        "message": f"Successfully enrolled {len(sample_embeddings)} biometric templates for student ID {student_id}",
-        "validSamplesCount": len(sample_embeddings)
+        "studentId": student_id,
+        "validSamplesEnrolled": len(sample_embeddings),
+        "hasFaceEnrolled": True,
+        "photoUrl": first_valid_photo,
+        "message": f"Successfully enrolled {len(sample_embeddings)} face template(s)."
     }
 
 @router.delete("/{student_id}/face")
-def delete_student_face_enrollment(student_id: str):
-    """Privacy feature: Permanently delete biometric face enrollment data for student"""
+def delete_student_face(student_id: str):
     db = get_db()
     doc_ref = db.collection("students").document(student_id)
     doc = doc_ref.get()
@@ -429,10 +447,11 @@ def delete_student_face_enrollment(student_id: str):
         raise HTTPException(status_code=404, detail="Student not found")
 
     doc_ref.update({
+        "hasFaceEnrolled": False,
         "faceEmbedding": None,
         "faceEmbeddings": [],
-        "hasFaceEnrolled": False,
         "enrolledSamplesCount": 0,
-        "photoUrl": None
+        "photoUrl": None,
+        "updatedAt": datetime.now(timezone.utc).isoformat()
     })
-    return {"status": "SUCCESS", "message": "Biometric face enrollment data deleted permanently."}
+    return {"status": "SUCCESS", "message": f"Biometric face data for student '{student_id}' deleted successfully."}

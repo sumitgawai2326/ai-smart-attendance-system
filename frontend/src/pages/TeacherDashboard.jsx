@@ -11,35 +11,95 @@ import {
   ClipboardList, 
   User, 
   AlertTriangle, 
-  Plus, 
   CheckCircle2, 
-  Edit
+  Loader2,
+  Calendar,
+  Layers,
+  Sparkles
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { studentAPI, subjectAPI } from '../services/api';
+import { dashboardAPI, classAPI } from '../services/api';
 
 const TeacherDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [students, setStudents] = useState([]);
-  const [subjects, setSubjects] = useState([]);
+
+  const [metrics, setMetrics] = useState(null);
+  const [selectedClassId, setSelectedClassId] = useState('');
+  const [classStudents, setClassStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    fetchTeacherMetrics();
+  }, [user]);
 
-  const fetchDashboardData = async () => {
+  const fetchTeacherMetrics = async () => {
+    setLoading(true);
+    setError('');
     try {
-      const [stRes, sbRes] = await Promise.all([
-        studentAPI.list('CLS-AIDS-3A'),
-        subjectAPI.list('CLS-AIDS-3A')
-      ]);
-      setStudents(stRes.data);
-      setSubjects(sbRes.data);
+      const teacherId = user?.id || user?.email || 'USR-TEACHER-01';
+      const res = await dashboardAPI.getTeacherMetrics(teacherId);
+      setMetrics(res.data);
+      if (res.data.assignedClasses && res.data.assignedClasses.length > 0) {
+        const firstClass = res.data.assignedClasses[0].id;
+        setSelectedClassId(firstClass);
+        loadClassStudents(firstClass);
+      } else {
+        setClassStudents(res.data.students || []);
+      }
     } catch (err) {
-      console.error('Error fetching teacher dashboard data:', err);
+      console.error('Error fetching teacher dashboard metrics:', err);
+      setError('Unable to load teacher dashboard data from cloud server.');
+    } finally {
+      setLoading(false);
     }
   };
+
+  const loadClassStudents = async (classId) => {
+    try {
+      const res = await classAPI.getStudents(classId);
+      setClassStudents(res.data);
+    } catch (err) {
+      console.error('Error fetching class students:', err);
+    }
+  };
+
+  const handleClassChange = (newClassId) => {
+    setSelectedClassId(newClassId);
+    loadClassStudents(newClassId);
+  };
+
+  if (loading) {
+    return (
+      <div className="py-24 flex flex-col items-center justify-center text-slate-400 space-y-3">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        <p className="text-sm font-medium">Loading Teacher Portal from database...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-rose-500/10 border border-rose-500/30 rounded-3xl p-8 text-center space-y-4">
+        <AlertTriangle className="w-10 h-10 text-rose-400 mx-auto" />
+        <h3 className="text-base font-bold text-white">Error Loading Dashboard</h3>
+        <p className="text-xs text-rose-300 max-w-md mx-auto">{error}</p>
+        <button
+          onClick={fetchTeacherMetrics}
+          className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-xl transition-all"
+        >
+          Retry Connection
+        </button>
+      </div>
+    );
+  }
+
+  const assignedClasses = metrics?.assignedClasses || [];
+  const assignedSubjects = metrics?.assignedSubjects || [];
+  const totalEnrolledInSelected = classStudents.length;
+  const enrolledFacesCount = classStudents.filter(s => s.hasFaceEnrolled).length;
+  const avgAttendance = metrics?.averageAttendancePercentage ?? 0.0;
 
   return (
     <div className="space-y-6">
@@ -47,7 +107,9 @@ const TeacherDashboard = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-white tracking-tight">Faculty Teacher Portal</h2>
-          <p className="text-sm text-slate-400">Welcome back, {user?.name || 'Prof. Alan Turing'}</p>
+          <p className="text-sm text-slate-400">
+            Welcome, <span className="text-slate-200 font-semibold">{user?.name || 'Faculty Member'}</span> • Academic Term 2026-27
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -65,12 +127,36 @@ const TeacherDashboard = () => {
         </div>
       </div>
 
-      {/* Stats Overview */}
+      {/* Real-time Dynamic KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Assigned Classes" value="1" icon={School} color="blue" subtitle="B.Tech AI & DS (Div A)" />
-        <StatCard title="Assigned Subjects" value={subjects.length || 3} icon={BookOpen} color="purple" subtitle="Active curriculum courses" />
-        <StatCard title="Enrolled Students" value={students.length || 32} icon={Users} color="emerald" subtitle={`${students.filter(s => s.hasFaceEnrolled).length} with AI Face Enrolled`} />
-        <StatCard title="Average Class Attendance" value="88.5%" icon={UserCheck} color="amber" subtitle="Current term average" />
+        <StatCard 
+          title="Assigned Classes" 
+          value={assignedClasses.length} 
+          icon={School} 
+          color="blue" 
+          subtitle={assignedClasses.length > 0 ? assignedClasses.map(c => c.name || c.id).join(', ') : 'No classes assigned'} 
+        />
+        <StatCard 
+          title="Assigned Subjects" 
+          value={assignedSubjects.length} 
+          icon={BookOpen} 
+          color="purple" 
+          subtitle={assignedSubjects.length > 0 ? `${assignedSubjects.length} active courses` : 'No subjects assigned'} 
+        />
+        <StatCard 
+          title="Enrolled Students" 
+          value={totalEnrolledInSelected} 
+          icon={Users} 
+          color="emerald" 
+          subtitle={`${enrolledFacesCount} with AI face template`} 
+        />
+        <StatCard 
+          title="Average Attendance" 
+          value={metrics?.totalSessionsConducted > 0 ? `${avgAttendance}%` : 'No sessions yet'} 
+          icon={UserCheck} 
+          color="amber" 
+          subtitle={metrics?.totalSessionsConducted > 0 ? `Across ${metrics.totalSessionsConducted} lectures` : '0 lectures conducted'} 
+        />
       </div>
 
       {/* Command Hub Grid */}
@@ -83,7 +169,7 @@ const TeacherDashboard = () => {
             </div>
             <h3 className="text-sm font-bold text-white">Live AI Attendance</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Multi-student facial detection, blink liveness verification, and real-time auto marking.
+              Multi-student facial detection with anti-spoofing and instant matching for selected division.
             </p>
           </div>
           <button
@@ -156,64 +242,88 @@ const TeacherDashboard = () => {
         </div>
       </div>
 
-      {/* Classroom Student Directory & Biometric Status */}
+      {/* Classroom Student Directory Filtered by Teacher's Assigned Class */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h3 className="text-base font-bold text-white">Classroom Student Directory</h3>
-            <p className="text-xs text-slate-400">Class: B.Tech AI & DS (Div A) • {students.length} Students Registered</p>
+            <h3 className="text-base font-bold text-white">Assigned Class Student Roster</h3>
+            <p className="text-xs text-slate-400">Students actively enrolled in your assigned division</p>
           </div>
-          <button
-            onClick={() => navigate('/teacher/enrollment')}
-            className="px-3.5 py-2 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 text-blue-300 font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-all"
-          >
-            <UserCheck className="w-4 h-4" /> Enroll Student Face
-          </button>
+
+          <div className="flex items-center gap-3">
+            {assignedClasses.length > 0 && (
+              <select
+                value={selectedClassId}
+                onChange={(e) => handleClassChange(e.target.value)}
+                className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-500"
+              >
+                {assignedClasses.map(c => (
+                  <option key={c.id} value={c.id}>{c.name || c.id} (Div {c.division || 'AI-2'})</option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={() => navigate('/teacher/enrollment')}
+              className="px-3.5 py-2 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 text-blue-300 font-semibold text-xs rounded-xl flex items-center gap-1.5 transition-all"
+            >
+              <UserCheck className="w-4 h-4" /> Enroll Face
+            </button>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-950/60 text-slate-400 uppercase font-semibold border-b border-slate-800">
-              <tr>
-                <th className="py-3 px-4">Roll No</th>
-                <th className="py-3 px-4">Student Name</th>
-                <th className="py-3 px-4">Email</th>
-                <th className="py-3 px-4">Branch & Year</th>
-                <th className="py-3 px-4">AI Biometrics</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800 text-slate-300">
-              {students.slice(0, 6).map((s) => (
-                <tr key={s.id} className="hover:bg-slate-800/40">
-                  <td className="py-3 px-4 font-mono font-semibold text-white">{s.rollNumber}</td>
-                  <td className="py-3 px-4 font-medium text-white">{s.name}</td>
-                  <td className="py-3 px-4 text-slate-400">{s.email}</td>
-                  <td className="py-3 px-4">{s.branch} - {s.year}</td>
-                  <td className="py-3 px-4">
-                    {s.hasFaceEnrolled ? (
-                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1 w-fit">
-                        <CheckCircle2 className="w-3 h-3" /> Enrolled
-                      </span>
-                    ) : (
-                      <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1 w-fit">
-                        <AlertTriangle className="w-3 h-3" /> Pending
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    <button
-                      onClick={() => navigate('/teacher/manual')}
-                      className="text-blue-400 hover:text-blue-300 text-xs font-semibold px-2 py-1 bg-blue-500/10 rounded-lg"
-                    >
-                      Mark / Edit
-                    </button>
-                  </td>
+        {classStudents.length === 0 ? (
+          <div className="py-12 text-center text-slate-500 text-xs space-y-2">
+            <Users className="w-8 h-8 text-slate-600 mx-auto" />
+            <p className="font-semibold text-slate-400">No students enrolled in this class yet.</p>
+            <p className="text-slate-500">Students added by Admin to this division will automatically appear here.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-950/60 text-slate-400 uppercase font-semibold border-b border-slate-800">
+                <tr>
+                  <th className="py-3 px-4">Roll No</th>
+                  <th className="py-3 px-4">Student Name</th>
+                  <th className="py-3 px-4">Email</th>
+                  <th className="py-3 px-4">Program & Year</th>
+                  <th className="py-3 px-4">Division</th>
+                  <th className="py-3 px-4">AI Biometrics</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-800 text-slate-300">
+                {classStudents.map((s) => (
+                  <tr key={s.id} className="hover:bg-slate-800/40">
+                    <td className="py-3 px-4 font-mono font-semibold text-white">{s.rollNumber}</td>
+                    <td className="py-3 px-4 font-medium text-white">{s.name}</td>
+                    <td className="py-3 px-4 text-slate-400">{s.email}</td>
+                    <td className="py-3 px-4">{s.program || s.branch} • {s.year}</td>
+                    <td className="py-3 px-4 font-mono font-semibold text-purple-400">{s.division || 'AI-2'}</td>
+                    <td className="py-3 px-4">
+                      {s.hasFaceEnrolled ? (
+                        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1 w-fit">
+                          <CheckCircle2 className="w-3 h-3" /> Enrolled
+                        </span>
+                      ) : (
+                        <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1 w-fit">
+                          <AlertTriangle className="w-3 h-3" /> Pending
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        onClick={() => navigate('/teacher/manual')}
+                        className="text-blue-400 hover:text-blue-300 text-xs font-semibold px-2.5 py-1 bg-blue-500/10 rounded-lg hover:bg-blue-500/20 transition-all"
+                      >
+                        Mark Attendance
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
