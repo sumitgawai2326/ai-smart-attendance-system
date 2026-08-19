@@ -36,15 +36,35 @@ export const dashboardAPI = {
 };
 
 export const academicAPI = {
+  // Academic Years
   listYears: () => API.get('/academic/years'),
   createYear: (data) => API.post('/academic/years', data),
+  updateYear: (id, data) => API.put(`/academic/years/${id}`, data),
   deleteYear: (id) => API.delete(`/academic/years/${id}`),
+
+  // Departments
   listDepartments: () => API.get('/academic/departments'),
   createDepartment: (data) => API.post('/academic/departments', data),
+  updateDepartment: (id, data) => API.put(`/academic/departments/${id}`, data),
   deleteDepartment: (id) => API.delete(`/academic/departments/${id}`),
-  listPrograms: () => API.get('/academic/programs'),
+
+  // Programs / Branches
+  listPrograms: (params) => API.get('/academic/programs', { params }),
   createProgram: (data) => API.post('/academic/programs', data),
+  updateProgram: (id, data) => API.put(`/academic/programs/${id}`, data),
   deleteProgram: (id) => API.delete(`/academic/programs/${id}`),
+
+  // Year Levels
+  listYearLevels: (params) => API.get('/academic/year-levels', { params }),
+  createYearLevel: (data) => API.post('/academic/year-levels', data),
+  updateYearLevel: (id, data) => API.put(`/academic/year-levels/${id}`, data),
+  deleteYearLevel: (id) => API.delete(`/academic/year-levels/${id}`),
+
+  // Semesters
+  listSemesters: (params) => API.get('/academic/semesters', { params }),
+  createSemester: (data) => API.post('/academic/semesters', data),
+  updateSemester: (id, data) => API.put(`/academic/semesters/${id}`, data),
+  deleteSemester: (id) => API.delete(`/academic/semesters/${id}`),
 };
 
 export const studentAPI = {

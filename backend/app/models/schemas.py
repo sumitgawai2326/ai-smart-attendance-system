@@ -49,36 +49,72 @@ class ResetPasswordRequest(BaseModel):
 # --- Academic Hierarchy Schemas ---
 class AcademicYearCreate(BaseModel):
     year: str # e.g. "2026-27"
+    startDate: Optional[str] = None
+    endDate: Optional[str] = None
     isCurrent: bool = True
 
 class AcademicYearResponse(BaseModel):
     id: str
     year: str
+    startDate: Optional[str] = None
+    endDate: Optional[str] = None
     isCurrent: bool = True
     createdAt: Optional[str] = None
 
 class DepartmentCreate(BaseModel):
     code: str # e.g. "AIDS"
     name: str # e.g. "Artificial Intelligence & Data Science"
+    shortName: Optional[str] = None # e.g. "AI & DS"
 
 class DepartmentResponse(BaseModel):
     id: str
     code: str
     name: str
+    shortName: Optional[str] = None
     createdAt: Optional[str] = None
 
 class ProgramCreate(BaseModel):
     code: str # e.g. "BTECH-AIDS"
     name: str # e.g. "B.Tech in Artificial Intelligence & Data Science"
-    department: str # e.g. "AI & Data Science"
+    shortName: Optional[str] = None # e.g. "B.Tech AI & DS"
+    degree: Optional[str] = "B.Tech"
+    department: str # e.g. "Artificial Intelligence & Data Science"
     durationYears: int = 4
 
 class ProgramResponse(BaseModel):
     id: str
     code: str
     name: str
+    shortName: Optional[str] = None
+    degree: Optional[str] = "B.Tech"
     department: str
     durationYears: int = 4
+    createdAt: Optional[str] = None
+
+class YearLevelCreate(BaseModel):
+    yearName: str # e.g. "2nd Year", "SE"
+    yearNumber: int # e.g. 2
+    programId: Optional[str] = None
+
+class YearLevelResponse(BaseModel):
+    id: str
+    yearName: str
+    yearNumber: int
+    programId: Optional[str] = None
+    createdAt: Optional[str] = None
+
+class SemesterCreate(BaseModel):
+    semesterName: str # e.g. "Semester III"
+    semesterNumber: int # e.g. 3
+    yearId: Optional[str] = None # e.g. "2nd Year"
+    programId: Optional[str] = None
+
+class SemesterResponse(BaseModel):
+    id: str
+    semesterName: str
+    semesterNumber: int
+    yearId: Optional[str] = None
+    programId: Optional[str] = None
     createdAt: Optional[str] = None
 
 # --- Student Schemas ---
@@ -88,8 +124,8 @@ class StudentCreate(BaseModel):
     email: EmailStr
     classId: str
     academicYear: Optional[str] = "2026-27"
-    department: Optional[str] = "AI & Data Science"
-    program: Optional[str] = "B.Tech AI & Data Science"
+    department: Optional[str] = "Artificial Intelligence & Data Science"
+    program: Optional[str] = "B.Tech in Artificial Intelligence & Data Science"
     year: Optional[str] = "2nd Year"
     semester: Optional[str] = "Semester III"
     division: Optional[str] = "AI-2"
@@ -140,8 +176,8 @@ class StudentResponse(BaseModel):
     email: str
     classId: str
     academicYear: Optional[str] = "2026-27"
-    department: Optional[str] = "AI & Data Science"
-    program: Optional[str] = "B.Tech AI & Data Science"
+    department: Optional[str] = "Artificial Intelligence & Data Science"
+    program: Optional[str] = "B.Tech in Artificial Intelligence & Data Science"
     year: Optional[str] = "2nd Year"
     semester: Optional[str] = "Semester III"
     division: Optional[str] = "AI-2"
@@ -214,8 +250,8 @@ class TeacherResponse(BaseModel):
 # --- Class & Subject Schemas ---
 class ClassCreate(BaseModel):
     name: str # e.g. "B.Tech AI & DS - 2nd Year (Div AI-2)"
-    department: str # e.g. "AI & Data Science"
-    program: Optional[str] = "B.Tech AI & Data Science"
+    department: str # e.g. "Artificial Intelligence & Data Science"
+    program: Optional[str] = "B.Tech in Artificial Intelligence & Data Science"
     academicYear: Optional[str] = "2026-27"
     year: str # e.g. "2nd Year"
     semester: Optional[str] = "Semester III"
@@ -229,8 +265,13 @@ class SubjectCreate(BaseModel):
     code: str
     name: str
     classId: str
-    teacherId: Optional[str] = None
+    credits: Optional[int] = 4
+    department: Optional[str] = None
+    program: Optional[str] = None
+    year: Optional[str] = None
     semester: Optional[str] = "Semester III"
+    division: Optional[str] = None
+    teacherId: Optional[str] = None
 
 class SubjectResponse(SubjectCreate):
     id: str

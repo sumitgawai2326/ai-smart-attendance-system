@@ -10,16 +10,22 @@ router = APIRouter(prefix="/subjects", tags=["Subjects & Courses"])
 @router.post("", response_model=SubjectResponse, status_code=status.HTTP_201_CREATED)
 def create_subject(s_in: SubjectCreate):
     db = get_db()
-    subj_id = f"SBJ-{s_in.code.strip().replace(' ', '').upper()}"
+    subj_code = s_in.code.strip().replace(' ', '').upper()
+    subj_id = f"SBJ-{subj_code}"
     if db.collection("subjects").document(subj_id).get().exists:
-        subj_id = f"SBJ-{uuid.uuid4().hex[:6].upper()}"
+        subj_id = f"SBJ-{subj_code}-{uuid.uuid4().hex[:4].upper()}"
 
     s_data = {
         "id": subj_id,
-        "code": s_in.code.strip().upper(),
+        "code": subj_code,
         "name": s_in.name.strip(),
         "classId": s_in.classId,
+        "credits": s_in.credits or 4,
+        "department": s_in.department or "",
+        "program": s_in.program or "",
+        "year": s_in.year or "",
         "semester": s_in.semester or "Semester III",
+        "division": s_in.division or "",
         "teacherId": s_in.teacherId or "USR-TEACHER-01",
         "createdAt": datetime.now(timezone.utc).isoformat()
     }
@@ -27,7 +33,14 @@ def create_subject(s_in: SubjectCreate):
     return s_data
 
 @router.get("", response_model=List[SubjectResponse])
-def list_subjects(class_id: Optional[str] = None, teacher_id: Optional[str] = None, semester: Optional[str] = None):
+def list_subjects(
+    class_id: Optional[str] = None,
+    teacher_id: Optional[str] = None,
+    semester: Optional[str] = None,
+    department: Optional[str] = None,
+    program: Optional[str] = None,
+    year: Optional[str] = None
+):
     db = get_db()
     ref = db.collection("subjects")
     docs = ref.get()
@@ -35,20 +48,26 @@ def list_subjects(class_id: Optional[str] = None, teacher_id: Optional[str] = No
     
     if len(subjects) == 0:
         default_subjs = [
-            {"id": "SBJ-DSA", "code": "CS301", "name": "Data Structures & Algorithms", "classId": "CLS-AIDS-AI2", "semester": "Semester III", "teacherId": "USR-TEACHER-01", "createdAt": datetime.now(timezone.utc).isoformat()},
-            {"id": "SBJ-DBMS", "code": "CS302", "name": "Database Management Systems", "classId": "CLS-AIDS-AI2", "semester": "Semester III", "teacherId": "USR-TEACHER-01", "createdAt": datetime.now(timezone.utc).isoformat()},
-            {"id": "SBJ-AI", "code": "AI303", "name": "Artificial Intelligence & ML", "classId": "CLS-AIDS-AI2", "semester": "Semester III", "teacherId": "USR-TEACHER-01", "createdAt": datetime.now(timezone.utc).isoformat()}
+            {"id": "SBJ-DSA", "code": "CS301", "name": "Data Structures & Algorithms", "classId": "CLS-AIDA-AI-2", "credits": 4, "department": "Artificial Intelligence & Data Science", "program": "B.Tech in Artificial Intelligence & Data Science", "year": "2nd Year", "semester": "Semester III", "division": "AI-2", "teacherId": "USR-TEACHER-01", "createdAt": datetime.now(timezone.utc).isoformat()},
+            {"id": "SBJ-DBMS", "code": "CS302", "name": "Database Management Systems", "classId": "CLS-AIDA-AI-2", "credits": 4, "department": "Artificial Intelligence & Data Science", "program": "B.Tech in Artificial Intelligence & Data Science", "year": "2nd Year", "semester": "Semester III", "division": "AI-2", "teacherId": "USR-TEACHER-01", "createdAt": datetime.now(timezone.utc).isoformat()},
+            {"id": "SBJ-AI", "code": "AI303", "name": "Artificial Intelligence & ML", "classId": "CLS-AIDA-AI-2", "credits": 4, "department": "Artificial Intelligence & Data Science", "program": "B.Tech in Artificial Intelligence & Data Science", "year": "2nd Year", "semester": "Semester III", "division": "AI-2", "teacherId": "USR-TEACHER-01", "createdAt": datetime.now(timezone.utc).isoformat()}
         ]
         for s in default_subjs:
             db.collection("subjects").document(s["id"]).set(s)
             subjects.append(s)
 
-    if class_id:
+    if class_id and class_id != "ALL":
         subjects = [s for s in subjects if s.get("classId") == class_id]
-    if teacher_id:
+    if teacher_id and teacher_id != "ALL":
         subjects = [s for s in subjects if s.get("teacherId") == teacher_id or s.get("teacherId") == "USR-TEACHER-01"]
-    if semester:
+    if semester and semester != "ALL":
         subjects = [s for s in subjects if s.get("semester") == semester]
+    if department and department != "ALL":
+        subjects = [s for s in subjects if s.get("department") in (department, "", None)]
+    if program and program != "ALL":
+        subjects = [s for s in subjects if s.get("program") in (program, "", None)]
+    if year and year != "ALL":
+        subjects = [s for s in subjects if s.get("year") in (year, "", None)]
 
     return subjects
 
@@ -63,7 +82,12 @@ def update_subject(subject_id: str, s_in: SubjectCreate):
         "code": s_in.code.strip().upper(),
         "name": s_in.name.strip(),
         "classId": s_in.classId,
+        "credits": s_in.credits or 4,
+        "department": s_in.department or "",
+        "program": s_in.program or "",
+        "year": s_in.year or "",
         "semester": s_in.semester or "Semester III",
+        "division": s_in.division or "",
         "teacherId": s_in.teacherId or "USR-TEACHER-01",
         "updatedAt": datetime.now(timezone.utc).isoformat()
     }
