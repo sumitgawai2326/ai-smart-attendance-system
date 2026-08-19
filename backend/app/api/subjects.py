@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 from typing import List
 import uuid
+from datetime import datetime, timezone
 from app.models.schemas import SubjectCreate, SubjectResponse
 from app.firebase.client import get_db
 
@@ -12,10 +13,11 @@ def create_subject(s_in: SubjectCreate):
     subj_id = f"SBJ-{uuid.uuid4().hex[:6].upper()}"
     s_data = {
         "id": subj_id,
-        "code": s_in.code,
-        "name": s_in.name,
+        "code": s_in.code.strip().upper(),
+        "name": s_in.name.strip(),
         "classId": s_in.classId,
-        "teacherId": s_in.teacherId
+        "teacherId": s_in.teacherId or "USR-TEACHER-01",
+        "createdAt": datetime.now(timezone.utc).isoformat()
     }
     db.collection("subjects").document(subj_id).set(s_data)
     return s_data
@@ -39,3 +41,29 @@ def list_subjects(class_id: str = None):
             subjects.append(s)
             
     return subjects
+
+@router.put("/{subject_id}", response_model=SubjectResponse)
+def update_subject(subject_id: str, s_in: SubjectCreate):
+    db = get_db()
+    doc_ref = db.collection("subjects").document(subject_id)
+    if not doc_ref.get().exists:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    
+    update_data = {
+        "code": s_in.code.strip().upper(),
+        "name": s_in.name.strip(),
+        "classId": s_in.classId,
+        "teacherId": s_in.teacherId or "USR-TEACHER-01",
+        "updatedAt": datetime.now(timezone.utc).isoformat()
+    }
+    doc_ref.update(update_data)
+    return doc_ref.get().to_dict()
+
+@router.delete("/{subject_id}")
+def delete_subject(subject_id: str):
+    db = get_db()
+    doc_ref = db.collection("subjects").document(subject_id)
+    if not doc_ref.get().exists:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    doc_ref.delete()
+    return {"status": "SUCCESS", "message": f"Subject '{subject_id}' deleted successfully."}

@@ -1,8 +1,11 @@
 from fastapi import APIRouter, HTTPException, status
-from typing import List
+from typing import List, Dict, Any
+from datetime import datetime, timezone
+import uuid
 from app.models.schemas import (
     SessionCreate, SessionResponse, FrameRecognitionRequest, SingleFaceRecognitionResult,
-    MultiFaceRecognitionResponse, ManualAttendanceCorrection, AttendanceRecordResponse
+    MultiFaceRecognitionResponse, ManualAttendanceCorrection, AttendanceRecordResponse,
+    ManualAttendanceSubmitRequest
 )
 from app.firebase.client import get_db
 from app.ai.matcher import ai_matcher
@@ -169,3 +172,84 @@ def get_session_attendance_records(session_id: str):
             "timestamp": rec.get("timestamp", "")
         })
     return records
+
+@router.post("/manual-session-submit")
+def submit_manual_attendance_session(req: ManualAttendanceSubmitRequest):
+    """
+    Manual Classroom Attendance Register (No Webcam Fallback):
+    Records entire classroom attendance batch manually with custom lecture topic notes.
+    """
+    db = get_db()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    session_id = f"SES_MANUAL_{req.classId}_{req.subjectId}_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}"
+
+    # 1. Create completed session document
+    session_data = {
+        "id": session_id,
+        "classId": req.classId,
+        "subjectId": req.subjectId,
+        "teacherId": req.teacherId or "USR-TEACHER-01",
+        "date": req.date,
+        "timeSlot": req.timeSlot or "10:00 AM - 11:00 AM",
+        "topicCovered": req.topicCovered or "Regular Lecture",
+        "method": "MANUAL",
+        "startTime": now_iso,
+        "endTime": now_iso,
+        "status": "COMPLETED",
+        "totalPresent": sum(1 for r in req.records if r.get("status") == "PRESENT"),
+        "totalAbsent": sum(1 for r in req.records if r.get("status") == "ABSENT"),
+        "totalLate": sum(1 for r in req.records if r.get("status") == "LATE"),
+        "createdAt": now_iso
+    }
+    db.collection("attendance_sessions").document(session_id).set(session_data)
+
+    # 2. Save individual student attendance records
+    saved_records = []
+    for r in req.records:
+        rec_id = f"ATT_{session_id}_{r['studentId']}"
+        rec_data = {
+            "id": rec_id,
+            "sessionId": session_id,
+            "studentId": r["studentId"],
+            "studentName": r.get("studentName", "Student"),
+            "rollNumber": r.get("rollNumber", "N/A"),
+            "classId": req.classId,
+            "subjectId": req.subjectId,
+            "status": r.get("status", "PRESENT"),
+            "confidence": 1.0,
+            "method": "MANUAL",
+            "markedBy": req.teacherId or "TEACHER_MANUAL",
+            "remarks": r.get("remarks", ""),
+            "timestamp": now_iso
+        }
+        db.collection("attendance_records").document(rec_id).set(rec_data)
+        saved_records.append(rec_data)
+
+    return {
+        "status": "SUCCESS",
+        "sessionId": session_id,
+        "message": f"Manual attendance submitted successfully! Present: {session_data['totalPresent']}, Absent: {session_data['totalAbsent']}, Late: {session_data['totalLate']}",
+        "session": session_data,
+        "recordsCount": len(saved_records)
+    }
+
+@router.put("/records/{record_id}")
+def update_attendance_record(record_id: str, payload: Dict[str, Any]):
+    """Update single attendance record status and remarks"""
+    db = get_db()
+    doc_ref = db.collection("attendance_records").document(record_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+
+    new_status = payload.get("status")
+    remarks = payload.get("remarks", "")
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    doc_ref.update({
+        "status": new_status,
+        "remarks": remarks,
+        "updatedAt": now_iso
+    })
+    return {"status": "SUCCESS", "message": f"Record updated to {new_status}"}
+

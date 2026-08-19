@@ -6,6 +6,8 @@ import ProtectedLayout from './components/ProtectedLayout';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
+import TeacherProfile from './pages/TeacherProfile';
+import ManualAttendance from './pages/ManualAttendance';
 import AttendanceCamera from './pages/AttendanceCamera';
 import StudentEnrollment from './pages/StudentEnrollment';
 import StudentDashboard from './pages/StudentDashboard';
@@ -29,7 +31,9 @@ const App = () => {
           <Route element={<ProtectedLayout allowedRoles={['TEACHER']} />}>
             <Route path="/teacher" element={<TeacherDashboard />} />
             <Route path="/teacher/attendance" element={<AttendanceCamera />} />
+            <Route path="/teacher/manual" element={<ManualAttendance />} />
             <Route path="/teacher/enrollment" element={<StudentEnrollment />} />
+            <Route path="/teacher/profile" element={<TeacherProfile />} />
           </Route>
 
           {/* Student Protected Routes */}

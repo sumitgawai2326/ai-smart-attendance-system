@@ -119,13 +119,44 @@ class TeacherCreate(BaseModel):
     email: EmailStr
     department: str
     assignedClasses: List[str] = []
+    phone: Optional[str] = None
+    employeeId: Optional[str] = None
+    designation: Optional[str] = "Assistant Professor"
+    qualification: Optional[str] = None
+    specialization: Optional[str] = None
+    cabin: Optional[str] = None
+    officeHours: Optional[str] = None
+    experienceYears: Optional[str] = None
+
+class TeacherProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    department: Optional[str] = None
+    phone: Optional[str] = None
+    employeeId: Optional[str] = None
+    designation: Optional[str] = None
+    qualification: Optional[str] = None
+    specialization: Optional[str] = None
+    cabin: Optional[str] = None
+    officeHours: Optional[str] = None
+    experienceYears: Optional[str] = None
+    assignedClasses: Optional[List[str]] = None
 
 class TeacherResponse(BaseModel):
     id: str
     name: str
     email: str
     department: str
+    phone: Optional[str] = None
+    employeeId: Optional[str] = None
+    designation: Optional[str] = "Assistant Professor"
+    qualification: Optional[str] = None
+    specialization: Optional[str] = None
+    cabin: Optional[str] = None
+    officeHours: Optional[str] = None
+    experienceYears: Optional[str] = None
     assignedClasses: List[str] = []
+    createdAt: Optional[str] = None
 
 # --- Class & Subject Schemas ---
 class ClassCreate(BaseModel):
@@ -145,6 +176,15 @@ class SubjectCreate(BaseModel):
 
 class SubjectResponse(SubjectCreate):
     id: str
+
+class ManualAttendanceSubmitRequest(BaseModel):
+    classId: str
+    subjectId: str
+    teacherId: str
+    date: str
+    timeSlot: Optional[str] = "10:00 AM - 11:00 AM"
+    topicCovered: Optional[str] = ""
+    records: List[Dict[str, Any]]
 
 # --- Attendance Session & Record Schemas ---
 class SessionCreate(BaseModel):

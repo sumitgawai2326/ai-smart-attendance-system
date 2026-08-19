@@ -58,7 +58,7 @@ export const studentAPI = {
 export const teacherAPI = {
   create: async (data) => {
     const res = await API.post('/teachers', data);
-    cache.teachers = null; // Invalidate cache on creation
+    cache.teachers = null;
     return res;
   },
   list: async () => {
@@ -67,6 +67,8 @@ export const teacherAPI = {
     cache.teachers = res.data;
     return res;
   },
+  get: (id) => API.get(`/teachers/${id}`),
+  updateProfile: (id, data) => API.put(`/teachers/${id}/profile`, data),
 };
 
 export const classAPI = {
@@ -96,6 +98,8 @@ export const subjectAPI = {
     cache.subjects[key] = res.data;
     return res;
   },
+  update: (id, data) => API.put(`/subjects/${id}`, data),
+  delete: (id) => API.delete(`/subjects/${id}`),
 };
 
 export const attendanceAPI = {
@@ -106,6 +110,8 @@ export const attendanceAPI = {
   markConfirmedStudent: (sessionId, studentId, studentName, rollNumber, confidence) => 
     API.post(`/attendance/mark-confirmed?sessionId=${encodeURIComponent(sessionId)}&studentId=${encodeURIComponent(studentId)}&studentName=${encodeURIComponent(studentName)}&rollNumber=${encodeURIComponent(rollNumber)}&confidence=${confidence}`),
   manualOverride: (sessionId, studentId, status, reason) => API.post('/attendance/manual-override', { sessionId, studentId, status, reason }),
+  submitManualSession: (data) => API.post('/attendance/manual-session-submit', data),
+  updateRecord: (recordId, data) => API.put(`/attendance/records/${recordId}`, data),
   getSessionRecords: (sessionId) => API.get(`/attendance/session/${sessionId}/records`),
 };
 
