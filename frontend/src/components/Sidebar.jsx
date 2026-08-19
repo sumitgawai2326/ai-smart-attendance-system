@@ -34,11 +34,17 @@ const Sidebar = () => {
                 <NavLink to="/admin" end className={navItemClass}>
                   <LayoutDashboard className="w-4 h-4" /> Admin Dashboard
                 </NavLink>
+                <NavLink to="/teacher/attendance" className={navItemClass}>
+                  <Camera className="w-4 h-4" /> Start AI Attendance
+                </NavLink>
+                <NavLink to="/teacher/manual" className={navItemClass}>
+                  <FileText className="w-4 h-4" /> Manual Register
+                </NavLink>
                 <NavLink to="/admin/enrollment" className={navItemClass}>
                   <UserCheck className="w-4 h-4" /> Student Face Enrollment
                 </NavLink>
                 <NavLink to="/reports" className={navItemClass}>
-                  <FileText className="w-4 h-4" /> Attendance Reports
+                  <BookOpen className="w-4 h-4" /> Attendance Reports
                 </NavLink>
               </>
             )}

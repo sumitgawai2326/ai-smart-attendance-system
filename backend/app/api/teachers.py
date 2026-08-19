@@ -138,3 +138,14 @@ def update_teacher_profile(teacher_id: str, profile_in: TeacherProfileUpdate):
             user_ref.update(u_upd)
 
     return format_teacher_response(doc_ref.get().to_dict())
+
+@router.delete("/{teacher_id}")
+def delete_teacher(teacher_id: str):
+    """Delete teacher record and user credentials"""
+    db = get_db()
+    doc_ref = db.collection("teachers").document(teacher_id)
+    if not doc_ref.get().exists:
+        raise HTTPException(status_code=404, detail="Teacher not found")
+    doc_ref.delete()
+    db.collection("users").document(teacher_id).delete()
+    return {"status": "SUCCESS", "message": f"Teacher '{teacher_id}' deleted successfully."}

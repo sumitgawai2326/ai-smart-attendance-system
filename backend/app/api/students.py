@@ -273,6 +273,40 @@ def delete_student_document(student_id: str, doc_type: str):
 
     return {"status": "SUCCESS", "message": f"Document '{doc_type}' removed successfully."}
 
+@router.put("/{student_id}/documents/{doc_type}/status")
+def verify_student_document(student_id: str, doc_type: str, payload: Dict[str, Any]):
+    """Admin Verification: Approve or Reject uploaded student document"""
+    db = get_db()
+    doc_ref = db.collection("students").document(student_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    student_data = doc.to_dict()
+    docs_vault = student_data.get("documents", {})
+
+    if doc_type not in docs_vault:
+        raise HTTPException(status_code=404, detail="Document not found in student vault")
+
+    status_val = payload.get("status", "Verified")
+    remarks_val = payload.get("remarks", "")
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    docs_vault[doc_type]["status"] = status_val
+    docs_vault[doc_type]["verificationRemarks"] = remarks_val
+    docs_vault[doc_type]["verifiedAt"] = now_iso
+
+    doc_ref.update({
+        "documents": docs_vault,
+        "updatedAt": now_iso
+    })
+
+    return {
+        "status": "SUCCESS",
+        "message": f"Document '{doc_type}' updated to {status_val}",
+        "document": docs_vault[doc_type]
+    }
+
 @router.delete("/{student_id}")
 def delete_student(student_id: str):
     """Permanently delete student record and associated credentials"""

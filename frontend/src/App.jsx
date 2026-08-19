@@ -27,8 +27,8 @@ const App = () => {
             <Route path="/admin/enrollment" element={<StudentEnrollment />} />
           </Route>
 
-          {/* Teacher Protected Routes */}
-          <Route element={<ProtectedLayout allowedRoles={['TEACHER']} />}>
+          {/* Teacher & Admin Shared Operational Routes */}
+          <Route element={<ProtectedLayout allowedRoles={['ADMIN', 'TEACHER']} />}>
             <Route path="/teacher" element={<TeacherDashboard />} />
             <Route path="/teacher/attendance" element={<AttendanceCamera />} />
             <Route path="/teacher/manual" element={<ManualAttendance />} />

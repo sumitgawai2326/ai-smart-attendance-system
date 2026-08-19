@@ -52,6 +52,7 @@ export const studentAPI = {
   deleteDocument: (id, docType) => API.delete(`/students/${id}/documents/${docType}`),
   delete: (id) => API.delete(`/students/${id}`),
   enrollFace: (id, imageSamples) => API.post(`/students/${id}/enroll-face`, { studentId: id, imageSamples }),
+  verifyDocument: (id, docType, status, remarks = '') => API.put(`/students/${id}/documents/${docType}/status`, { status, remarks }),
   deleteFace: (id) => API.delete(`/students/${id}/face`),
 };
 
@@ -69,6 +70,7 @@ export const teacherAPI = {
   },
   get: (id) => API.get(`/teachers/${id}`),
   updateProfile: (id, data) => API.put(`/teachers/${id}/profile`, data),
+  delete: (id) => API.delete(`/teachers/${id}`),
 };
 
 export const classAPI = {
@@ -83,6 +85,8 @@ export const classAPI = {
     cache.classes = res.data;
     return res;
   },
+  update: (id, data) => API.put(`/classes/${id}`, data),
+  delete: (id) => API.delete(`/classes/${id}`),
 };
 
 export const subjectAPI = {
