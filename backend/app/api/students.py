@@ -312,12 +312,37 @@ def delete_student(student_id: str):
     """Permanently delete student record and associated credentials"""
     db = get_db()
     doc_ref = db.collection("students").document(student_id)
-    if not doc_ref.get().exists:
-        raise HTTPException(status_code=404, detail="Student not found")
+    doc = doc_ref.get()
+    
+    if not doc.exists:
+        # Fallback search by email in students collection
+        by_email = db.collection("students").where("email", "==", student_id).get()
+        if len(by_email) > 0:
+            doc_ref = db.collection("students").document(by_email[0].id)
+            doc = by_email[0]
+        else:
+            raise HTTPException(status_code=404, detail="Student not found")
 
+    real_student_id = doc_ref.id
+    student_data = doc.to_dict()
+    student_email = student_data.get("email")
+
+    # 1. Delete student record from students collection
     doc_ref.delete()
-    db.collection("users").document(student_id).delete()
-    return {"status": "SUCCESS", "message": f"Student '{student_id}' deleted successfully."}
+
+    # 2. Delete user credentials from users collection
+    db.collection("users").document(real_student_id).delete()
+    if student_email:
+        users_by_email = db.collection("users").where("email", "==", student_email).get()
+        for u in users_by_email:
+            db.collection("users").document(u.id).delete()
+
+    # 3. Clean up attendance records for this student
+    att_docs = db.collection("attendance_records").where("studentId", "==", real_student_id).get()
+    for att in att_docs:
+        db.collection("attendance_records").document(att.id).delete()
+
+    return {"status": "SUCCESS", "message": f"Student '{real_student_id}' deleted successfully."}
 
 @router.post("/{student_id}/enroll-face")
 def enroll_student_face(student_id: str, req: FaceEnrollmentRequest):

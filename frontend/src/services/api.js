@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-export const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// Default to live Render backend in production, or localhost:8000 in dev
+export const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://ai-attendance-backend-3v8s.onrender.com' : 'http://localhost:8000');
 
 const API = axios.create({
   baseURL: `${API_BASE}/api/v1`,
