@@ -173,7 +173,8 @@ class LocalDocumentReference:
     def __init__(self, db, collection_name, doc_id):
         self.db = db
         self.collection_name = collection_name
-        self.doc_id = doc_id
+        self.doc_id = str(doc_id)
+        self.id = str(doc_id)
 
     def get(self):
         with self.db._lock:

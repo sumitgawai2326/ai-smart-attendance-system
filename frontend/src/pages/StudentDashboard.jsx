@@ -4,8 +4,11 @@ import { useAuth } from '../context/AuthContext';
 import StatCard from '../components/StatCard';
 import { User, CheckCircle2, AlertTriangle, BookOpen, Calendar, Percent } from 'lucide-react';
 
+import { useNavigate } from 'react-router-dom';
+
 const StudentDashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -39,12 +42,15 @@ const StudentDashboard = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-white tracking-tight">Student Attendance Portal</h2>
-          <p className="text-sm text-slate-400">Welcome, {user?.name || 'Rahul Patil'} (Roll No: 24)</p>
+          <p className="text-sm text-slate-400">Welcome, {user?.name || 'Rahul Patil'}</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="bg-slate-900 border border-slate-800 text-slate-300 text-xs px-3.5 py-2 rounded-xl font-medium">
-            Class: B.Tech AI & DS (Div A)
-          </span>
+          <button
+            onClick={() => navigate('/student/profile')}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-md shadow-blue-600/20 flex items-center gap-2 transition-all"
+          >
+            <User className="w-4 h-4" /> My Profile & Documents
+          </button>
         </div>
       </div>
 

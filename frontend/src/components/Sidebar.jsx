@@ -63,10 +63,10 @@ const Sidebar = () => {
             {role === 'STUDENT' && (
               <>
                 <NavLink to="/student" end className={navItemClass}>
-                  <LayoutDashboard className="w-4 h-4" /> Student Dashboard
+                  <LayoutDashboard className="w-4 h-4" /> Attendance Overview
                 </NavLink>
-                <NavLink to="/student/history" className={navItemClass}>
-                  <FileText className="w-4 h-4" /> Attendance Log
+                <NavLink to="/student/profile" className={navItemClass}>
+                  <UserCheck className="w-4 h-4" /> My Profile & Documents
                 </NavLink>
               </>
             )}

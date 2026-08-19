@@ -1,13 +1,46 @@
 from fastapi import APIRouter, HTTPException, status
-from typing import List
+from typing import List, Dict, Any
 import uuid
 from datetime import datetime, timezone
-from app.models.schemas import StudentCreate, StudentResponse, FaceEnrollmentRequest
+from app.models.schemas import StudentCreate, StudentResponse, FaceEnrollmentRequest, StudentProfileUpdate, DocumentUploadRequest
 from app.firebase.client import get_db
 from app.ai.detector import face_detector
 from app.ai.recognizer import face_recognizer
 
 router = APIRouter(prefix="/students", tags=["Students"])
+
+def format_student_response(d: Dict[str, Any]) -> Dict[str, Any]:
+    embs = d.get("faceEmbeddings") or []
+    emb = d.get("faceEmbedding")
+    has_valid_embs = bool(embs and len(embs) > 0 and len(embs[0]) >= 500)
+    has_valid_emb = bool(emb and len(emb) >= 500)
+    has_enrolled = has_valid_embs or has_valid_emb or bool(d.get("hasFaceEnrolled") and (has_valid_embs or has_valid_emb))
+
+    return {
+        "id": d.get("id"),
+        "rollNumber": d.get("rollNumber"),
+        "name": d.get("name"),
+        "email": d.get("email"),
+        "classId": d.get("classId", "CLS-AIDS-3A"),
+        "division": d.get("division", "A"),
+        "branch": d.get("branch", "AI & DS"),
+        "year": d.get("year", "3rd Year"),
+        "prnNumber": d.get("prnNumber", ""),
+        "phone": d.get("phone", ""),
+        "whatsapp": d.get("whatsapp", ""),
+        "dob": d.get("dob", ""),
+        "gender": d.get("gender", ""),
+        "bloodGroup": d.get("bloodGroup", ""),
+        "guardianName": d.get("guardianName", ""),
+        "guardianPhone": d.get("guardianPhone", ""),
+        "address": d.get("address", ""),
+        "emergencyContact": d.get("emergencyContact", ""),
+        "hasFaceEnrolled": has_enrolled,
+        "enrolledSamplesCount": len(embs) if embs else (1 if has_valid_emb else 0),
+        "photoUrl": d.get("photoUrl"),
+        "documents": d.get("documents", {}),
+        "createdAt": d.get("createdAt")
+    }
 
 @router.post("", response_model=StudentResponse, status_code=status.HTTP_201_CREATED)
 def create_student(student_in: StudentCreate):
@@ -40,17 +73,28 @@ def create_student(student_in: StudentCreate):
         "division": student_in.division or "A",
         "branch": student_in.branch or "AI & DS",
         "year": student_in.year or "3rd Year",
+        "prnNumber": student_in.prnNumber or "",
+        "phone": student_in.phone or "",
+        "whatsapp": "",
+        "dob": "",
+        "gender": "",
+        "bloodGroup": "",
+        "guardianName": "",
+        "guardianPhone": "",
+        "address": "",
+        "emergencyContact": "",
         "hasFaceEnrolled": False,
         "faceEmbedding": None,
         "faceEmbeddings": [],
         "enrolledSamplesCount": 0,
         "photoUrl": None,
+        "documents": {},
         "createdAt": now_iso
     }
     
     db.collection("students").document(student_id).set(student_data)
     
-    # Create corresponding student user account if absent
+    # Create corresponding student user account
     db.collection("users").document(student_id).set({
         "id": student_id,
         "email": clean_email,
@@ -59,71 +103,30 @@ def create_student(student_in: StudentCreate):
         "createdAt": now_iso
     })
     
-    return student_data
+    return format_student_response(student_data)
 
 @router.get("", response_model=List[StudentResponse])
 def list_students(class_id: str = None):
     db = get_db()
     ref = db.collection("students")
     docs = ref.where("classId", "==", class_id).get() if class_id else ref.get()
-    
-    students = []
-    for doc in docs:
-        d = doc.to_dict()
-        embs = d.get("faceEmbeddings") or []
-        emb = d.get("faceEmbedding")
-        # Valid if has 1536-dim multi-template or single template
-        has_valid_embs = bool(embs and len(embs) > 0 and len(embs[0]) >= 500)
-        has_valid_emb = bool(emb and len(emb) >= 500)
-        has_enrolled = has_valid_embs or has_valid_emb or bool(d.get("hasFaceEnrolled") and (has_valid_embs or has_valid_emb))
-            
-        students.append({
-            "id": d.get("id"),
-            "rollNumber": d.get("rollNumber"),
-            "name": d.get("name"),
-            "email": d.get("email"),
-            "classId": d.get("classId"),
-            "division": d.get("division", "A"),
-            "branch": d.get("branch", "AI & DS"),
-            "year": d.get("year", "3rd Year"),
-            "hasFaceEnrolled": has_enrolled,
-            "enrolledSamplesCount": len(embs) if embs else (1 if has_valid_emb else 0),
-            "photoUrl": d.get("photoUrl"),
-            "createdAt": d.get("createdAt")
-        })
-    return students
+    return [format_student_response(doc.to_dict()) for doc in docs]
 
 @router.get("/{student_id}", response_model=StudentResponse)
 def get_student(student_id: str):
     db = get_db()
     doc = db.collection("students").document(student_id).get()
     if not doc.exists:
+        # Check by email or user ID
+        users = db.collection("students").where("email", "==", student_id).get()
+        if len(users) > 0:
+            return format_student_response(users[0].to_dict())
         raise HTTPException(status_code=404, detail="Student not found")
-    d = doc.to_dict()
-    embs = d.get("faceEmbeddings") or []
-    emb = d.get("faceEmbedding")
-    has_valid_embs = bool(embs and len(embs) > 0 and len(embs[0]) >= 500)
-    has_valid_emb = bool(emb and len(emb) >= 500)
-    has_enrolled = has_valid_embs or has_valid_emb
-
-    return {
-        "id": d.get("id"),
-        "rollNumber": d.get("rollNumber"),
-        "name": d.get("name"),
-        "email": d.get("email"),
-        "classId": d.get("classId"),
-        "division": d.get("division", "A"),
-        "branch": d.get("branch", "AI & DS"),
-        "year": d.get("year", "3rd Year"),
-        "hasFaceEnrolled": has_enrolled,
-        "enrolledSamplesCount": len(embs) if embs else (1 if has_valid_emb else 0),
-        "photoUrl": d.get("photoUrl"),
-        "createdAt": d.get("createdAt")
-    }
+    return format_student_response(doc.to_dict())
 
 @router.put("/{student_id}", response_model=StudentResponse)
 def update_student(student_id: str, student_in: StudentCreate):
-    """Update student personal and academic details"""
+    """Update student personal and academic details (Admin / Faculty)"""
     db = get_db()
     doc_ref = db.collection("students").document(student_id)
     doc = doc_ref.get()
@@ -137,13 +140,11 @@ def update_student(student_id: str, student_in: StudentCreate):
     if not clean_roll or not clean_name:
         raise HTTPException(status_code=400, detail="Roll Number and Full Name are required.")
 
-    # Check roll number uniqueness among other students
     existing_roll = db.collection("students").where("rollNumber", "==", clean_roll).get()
     for r in existing_roll:
         if r.id != student_id:
             raise HTTPException(status_code=400, detail=f"Roll Number '{clean_roll}' is already assigned to another student.")
 
-    # Check email uniqueness among other students
     existing_email = db.collection("students").where("email", "==", clean_email).get()
     for e in existing_email:
         if e.id != student_id:
@@ -157,35 +158,120 @@ def update_student(student_id: str, student_in: StudentCreate):
         "division": student_in.division or "A",
         "branch": student_in.branch or "AI & DS",
         "year": student_in.year or "3rd Year",
+        "phone": student_in.phone or "",
+        "prnNumber": student_in.prnNumber or "",
         "updatedAt": datetime.now(timezone.utc).isoformat()
     }
     doc_ref.update(update_payload)
 
-    # Update corresponding user profile
     user_ref = db.collection("users").document(student_id)
     if user_ref.get().exists:
         user_ref.update({"name": clean_name, "email": clean_email})
 
-    updated_doc = doc_ref.get().to_dict()
-    embs = updated_doc.get("faceEmbeddings") or []
-    emb = updated_doc.get("faceEmbedding")
-    has_valid_embs = bool(embs and len(embs) > 0 and len(embs[0]) >= 500)
-    has_valid_emb = bool(emb and len(emb) >= 500)
+    return format_student_response(doc_ref.get().to_dict())
+
+@router.put("/{student_id}/profile", response_model=StudentResponse)
+def update_student_profile(student_id: str, profile_in: StudentProfileUpdate):
+    """
+    Student Self-Service Profile Update:
+    Enables students to maintain their personal, contact, guardian, and address information.
+    """
+    db = get_db()
+    doc_ref = db.collection("students").document(student_id)
+    doc = doc_ref.get()
+    
+    if not doc.exists:
+        # Check by email lookup if student_id is user email
+        by_email = db.collection("students").where("email", "==", student_id).get()
+        if len(by_email) > 0:
+            doc_ref = db.collection("students").document(by_email[0].id)
+            doc = by_email[0]
+        else:
+            raise HTTPException(status_code=404, detail="Student not found")
+
+    update_dict = {k: v for k, v in profile_in.model_dump().items() if v is not None}
+    update_dict["updatedAt"] = datetime.now(timezone.utc).isoformat()
+
+    doc_ref.update(update_dict)
+    
+    # Update associated user record if name or email changed
+    if "name" in update_dict or "email" in update_dict:
+        user_ref = db.collection("users").document(doc_ref.id)
+        if user_ref.get().exists:
+            user_update = {}
+            if "name" in update_dict:
+                user_update["name"] = update_dict["name"]
+            if "email" in update_dict:
+                user_update["email"] = update_dict["email"]
+            user_ref.update(user_update)
+
+    return format_student_response(doc_ref.get().to_dict())
+
+@router.post("/{student_id}/upload-document")
+def upload_student_document(student_id: str, req: DocumentUploadRequest):
+    """
+    Document Vault: Upload important student documents (College ID, Aadhaar, Marksheet, Fee Receipt)
+    """
+    db = get_db()
+    doc_ref = db.collection("students").document(student_id)
+    doc = doc_ref.get()
+    
+    if not doc.exists:
+        by_email = db.collection("students").where("email", "==", student_id).get()
+        if len(by_email) > 0:
+            doc_ref = db.collection("students").document(by_email[0].id)
+            doc = by_email[0]
+        else:
+            raise HTTPException(status_code=404, detail="Student not found")
+
+    student_data = doc.to_dict()
+    docs_vault = student_data.get("documents", {})
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    docs_vault[req.documentType] = {
+        "title": req.title,
+        "fileName": req.fileName,
+        "fileBase64": req.fileBase64,
+        "fileType": req.fileType,
+        "fileSize": req.fileSize or "1.2 MB",
+        "status": "Submitted",
+        "uploadedAt": now_iso
+    }
+
+    doc_ref.update({
+        "documents": docs_vault,
+        "updatedAt": now_iso
+    })
 
     return {
-        "id": updated_doc.get("id"),
-        "rollNumber": updated_doc.get("rollNumber"),
-        "name": updated_doc.get("name"),
-        "email": updated_doc.get("email"),
-        "classId": updated_doc.get("classId"),
-        "division": updated_doc.get("division", "A"),
-        "branch": updated_doc.get("branch", "AI & DS"),
-        "year": updated_doc.get("year", "3rd Year"),
-        "hasFaceEnrolled": has_valid_embs or has_valid_emb,
-        "enrolledSamplesCount": len(embs) if embs else (1 if has_valid_emb else 0),
-        "photoUrl": updated_doc.get("photoUrl"),
-        "createdAt": updated_doc.get("createdAt")
+        "status": "SUCCESS",
+        "message": f"Document '{req.title}' uploaded successfully.",
+        "documents": docs_vault
     }
+
+@router.delete("/{student_id}/documents/{doc_type}")
+def delete_student_document(student_id: str, doc_type: str):
+    """Delete an uploaded document from the student's vault"""
+    db = get_db()
+    doc_ref = db.collection("students").document(student_id)
+    doc = doc_ref.get()
+    
+    if not doc.exists:
+        by_email = db.collection("students").where("email", "==", student_id).get()
+        if len(by_email) > 0:
+            doc_ref = db.collection("students").document(by_email[0].id)
+            doc = by_email[0]
+        else:
+            raise HTTPException(status_code=404, detail="Student not found")
+
+    student_data = doc.to_dict()
+    docs_vault = student_data.get("documents", {})
+
+    if doc_type in docs_vault:
+        docs_vault.pop(doc_type)
+        doc_ref.update({"documents": docs_vault, "updatedAt": datetime.now(timezone.utc).isoformat()})
+
+    return {"status": "SUCCESS", "message": f"Document '{doc_type}' removed successfully."}
 
 @router.delete("/{student_id}")
 def delete_student(student_id: str):
@@ -238,7 +324,6 @@ def enroll_student_face(student_id: str, req: FaceEnrollmentRequest):
         primary_face = faces[0]
         cropped = face_detector.crop_face(img, primary_face)
 
-        # Quality check with relaxed tolerance for live webcams
         is_good, quality_msg, _ = face_detector.check_face_quality(cropped)
         if not is_good:
             rejected_reasons.append(f"Sample #{idx+1}: {quality_msg}")
@@ -260,7 +345,6 @@ def enroll_student_face(student_id: str, req: FaceEnrollmentRequest):
 
     master_embedding = face_recognizer.average_embeddings(sample_embeddings)
 
-    # Save multi-template array, master average template, and enrolled photo
     doc_ref.update({
         "faceEmbedding": master_embedding,
         "faceEmbeddings": sample_embeddings,

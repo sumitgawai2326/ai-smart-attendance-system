@@ -9,6 +9,7 @@ import TeacherDashboard from './pages/TeacherDashboard';
 import AttendanceCamera from './pages/AttendanceCamera';
 import StudentEnrollment from './pages/StudentEnrollment';
 import StudentDashboard from './pages/StudentDashboard';
+import StudentProfile from './pages/StudentProfile';
 import ReportsPage from './pages/ReportsPage';
 
 const App = () => {
@@ -34,6 +35,7 @@ const App = () => {
           {/* Student Protected Routes */}
           <Route element={<ProtectedLayout allowedRoles={['STUDENT']} />}>
             <Route path="/student" element={<StudentDashboard />} />
+            <Route path="/student/profile" element={<StudentProfile />} />
             <Route path="/student/history" element={<StudentDashboard />} />
           </Route>
 

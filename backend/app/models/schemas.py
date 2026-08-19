@@ -55,6 +55,34 @@ class StudentCreate(BaseModel):
     division: Optional[str] = "A"
     branch: str = "AI & DS"
     year: str = "3rd Year"
+    phone: Optional[str] = None
+    prnNumber: Optional[str] = None
+
+class StudentProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    rollNumber: Optional[str] = None
+    prnNumber: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    whatsapp: Optional[str] = None
+    dob: Optional[str] = None
+    gender: Optional[str] = None
+    bloodGroup: Optional[str] = None
+    branch: Optional[str] = None
+    year: Optional[str] = None
+    division: Optional[str] = None
+    guardianName: Optional[str] = None
+    guardianPhone: Optional[str] = None
+    address: Optional[str] = None
+    emergencyContact: Optional[str] = None
+
+class DocumentUploadRequest(BaseModel):
+    documentType: str  # e.g., 'collegeId', 'aadhaarCard', 'marksheet', 'feeReceipt', 'other'
+    title: str
+    fileName: str
+    fileBase64: str
+    fileType: str  # e.g., 'image/jpeg', 'image/png', 'application/pdf'
+    fileSize: Optional[str] = None
 
 class StudentResponse(BaseModel):
     id: str
@@ -65,9 +93,20 @@ class StudentResponse(BaseModel):
     division: Optional[str] = "A"
     branch: str = "AI & DS"
     year: str = "3rd Year"
+    prnNumber: Optional[str] = None
+    phone: Optional[str] = None
+    whatsapp: Optional[str] = None
+    dob: Optional[str] = None
+    gender: Optional[str] = None
+    bloodGroup: Optional[str] = None
+    guardianName: Optional[str] = None
+    guardianPhone: Optional[str] = None
+    address: Optional[str] = None
+    emergencyContact: Optional[str] = None
     hasFaceEnrolled: bool = False
     enrolledSamplesCount: Optional[int] = 0
     photoUrl: Optional[str] = None
+    documents: Optional[Dict[str, Any]] = {}
     createdAt: Optional[str] = None
 
 class FaceEnrollmentRequest(BaseModel):
