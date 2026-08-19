@@ -26,8 +26,17 @@ const ManualAttendance = () => {
   const [classes, setClasses] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [students, setStudents] = useState([]);
-  const [selectedClass, setSelectedClass] = useState('CLS-AIDS-3A');
-  const [selectedSubject, setSelectedSubject] = useState('SBJ-DSA');
+  const [academicYears, setAcademicYears] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [yearLevels, setYearLevels] = useState([]);
+  const [semesters, setSemesters] = useState([]);
+
+  const [selectedAY, setSelectedAY] = useState('ALL');
+  const [selectedDept, setSelectedDept] = useState('ALL');
+  const [selectedYear, setSelectedYear] = useState('ALL');
+  const [selectedSem, setSelectedSem] = useState('ALL');
+  const [selectedClass, setSelectedClass] = useState('');
+  const [selectedSubject, setSelectedSubject] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [timeSlot, setTimeSlot] = useState('10:00 AM - 11:00 AM');
   const [topicCovered, setTopicCovered] = useState('');
@@ -56,12 +65,21 @@ const ManualAttendance = () => {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const [cRes, sRes] = await Promise.all([
+      const [cRes, sRes, ayRes, dpRes, ylRes, smRes] = await Promise.all([
         classAPI.list(),
-        subjectAPI.list(selectedClass)
+        subjectAPI.list(),
+        import('../services/api').then(m => m.academicAPI.listYears()),
+        import('../services/api').then(m => m.academicAPI.listDepartments()),
+        import('../services/api').then(m => m.academicAPI.listYearLevels()),
+        import('../services/api').then(m => m.academicAPI.listSemesters())
       ]);
       setClasses(cRes.data);
       setSubjects(sRes.data);
+      setAcademicYears(ayRes.data);
+      setDepartments(dpRes.data);
+      setYearLevels(ylRes.data);
+      setSemesters(smRes.data);
+
       if (cRes.data.length > 0 && !selectedClass) setSelectedClass(cRes.data[0].id);
       if (sRes.data.length > 0 && !selectedSubject) setSelectedSubject(sRes.data[0].id);
     } catch (err) {
@@ -70,6 +88,19 @@ const ManualAttendance = () => {
       setLoading(false);
     }
   };
+
+  const filteredClasses = classes.filter(c => {
+    if (selectedAY !== 'ALL' && c.academicYear && c.academicYear !== selectedAY) return false;
+    if (selectedDept !== 'ALL' && c.department && c.department !== selectedDept) return false;
+    if (selectedYear !== 'ALL' && c.year && c.year !== selectedYear) return false;
+    if (selectedSem !== 'ALL' && c.semester && c.semester !== selectedSem) return false;
+    return true;
+  });
+
+  const filteredSubjects = subjects.filter(s => {
+    if (selectedClass && s.classId && s.classId !== selectedClass && s.classId !== 'ALL') return false;
+    return true;
+  });
 
   const loadStudentsForClass = async (classId) => {
     try {
@@ -213,51 +244,75 @@ const ManualAttendance = () => {
         </div>
       )}
 
-      {/* Control Panel / Session Settings */}
+      {/* Control Panel / Session Settings with Academic Cascading Dropdowns */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1.5">Classroom & Division</label>
+            <label className="block text-[11px] font-semibold text-slate-400 mb-1">Academic Year</label>
+            <select
+              value={selectedAY}
+              onChange={(e) => setSelectedAY(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:border-blue-500"
+            >
+              <option value="ALL">All Academic Years</option>
+              {academicYears.map(ay => <option key={ay.id} value={ay.year}>{ay.year}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-400 mb-1">Department</label>
+            <select
+              value={selectedDept}
+              onChange={(e) => setSelectedDept(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:border-purple-500"
+            >
+              <option value="ALL">All Departments</option>
+              {departments.map(d => <option key={d.id} value={d.name}>{d.name} ({d.code})</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-400 mb-1">Classroom & Division</label>
             <select
               value={selectedClass}
               onChange={(e) => setSelectedClass(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:border-blue-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:border-emerald-500 font-semibold"
             >
-              {classes.map(c => (
-                <option key={c.id} value={c.id}>{c.name} ({c.department})</option>
+              {filteredClasses.map(c => (
+                <option key={c.id} value={c.id}>{c.name} ({c.division})</option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1.5">Subject / Course</label>
+            <label className="block text-[11px] font-semibold text-slate-400 mb-1">Subject / Course</label>
             <select
               value={selectedSubject}
               onChange={(e) => setSelectedSubject(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:border-blue-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:border-amber-500 font-semibold"
             >
-              {subjects.map(s => (
+              {filteredSubjects.map(s => (
                 <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1.5">Lecture Date</label>
+            <label className="block text-[11px] font-semibold text-slate-400 mb-1">Lecture Date</label>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:border-blue-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-white focus:border-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1.5">Time Slot</label>
+            <label className="block text-[11px] font-semibold text-slate-400 mb-1">Time Slot</label>
             <select
               value={timeSlot}
               onChange={(e) => setTimeSlot(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:border-blue-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white focus:border-blue-500"
             >
               <option value="09:00 AM - 10:00 AM">09:00 AM - 10:00 AM</option>
               <option value="10:00 AM - 11:00 AM">10:00 AM - 11:00 AM</option>

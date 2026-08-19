@@ -117,6 +117,18 @@ class SemesterResponse(BaseModel):
     programId: Optional[str] = None
     createdAt: Optional[str] = None
 
+class DivisionCreate(BaseModel):
+    divisionName: str # e.g. "A", "B", "C", "AI-1", "AI-2"
+    department: Optional[str] = None
+    program: Optional[str] = None
+
+class DivisionResponse(BaseModel):
+    id: str
+    divisionName: str
+    department: Optional[str] = None
+    program: Optional[str] = None
+    createdAt: Optional[str] = None
+
 # --- Student Schemas ---
 class StudentCreate(BaseModel):
     rollNumber: str

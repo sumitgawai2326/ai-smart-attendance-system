@@ -24,8 +24,17 @@ const AttendanceCamera = () => {
   const { user } = useAuth();
   const [classes, setClasses] = useState([]);
   const [subjects, setSubjects] = useState([]);
-  const [selectedClass, setSelectedClass] = useState('CLS-AIDS-3A');
-  const [selectedSubject, setSelectedSubject] = useState('SBJ-DSA');
+  const [academicYears, setAcademicYears] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [yearLevels, setYearLevels] = useState([]);
+  const [semesters, setSemesters] = useState([]);
+
+  const [selectedAY, setSelectedAY] = useState('ALL');
+  const [selectedDept, setSelectedDept] = useState('ALL');
+  const [selectedYear, setSelectedYear] = useState('ALL');
+  const [selectedSem, setSelectedSem] = useState('ALL');
+  const [selectedClass, setSelectedClass] = useState('');
+  const [selectedSubject, setSelectedSubject] = useState('');
 
   // Session State
   const [sessionId, setSessionId] = useState(null);
@@ -45,23 +54,48 @@ const AttendanceCamera = () => {
   const markedStudentIdsRef = useRef(new Set());
 
   useEffect(() => {
-    loadClassAndSubjects();
+    loadAcademicData();
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
 
-  const loadClassAndSubjects = async () => {
+  const loadAcademicData = async () => {
     try {
-      const [cRes, sRes] = await Promise.all([classAPI.list(), subjectAPI.list()]);
+      const [cRes, sRes, ayRes, dpRes, ylRes, smRes] = await Promise.all([
+        classAPI.list(),
+        subjectAPI.list(),
+        import('../services/api').then(m => m.academicAPI.listYears()),
+        import('../services/api').then(m => m.academicAPI.listDepartments()),
+        import('../services/api').then(m => m.academicAPI.listYearLevels()),
+        import('../services/api').then(m => m.academicAPI.listSemesters())
+      ]);
       setClasses(cRes.data);
       setSubjects(sRes.data);
+      setAcademicYears(ayRes.data);
+      setDepartments(dpRes.data);
+      setYearLevels(ylRes.data);
+      setSemesters(smRes.data);
+
       if (cRes.data.length > 0 && !selectedClass) setSelectedClass(cRes.data[0].id);
       if (sRes.data.length > 0 && !selectedSubject) setSelectedSubject(sRes.data[0].id);
     } catch (err) {
-      console.error(err);
+      console.error('Error loading academic data:', err);
     }
   };
+
+  const filteredClasses = classes.filter(c => {
+    if (selectedAY !== 'ALL' && c.academicYear && c.academicYear !== selectedAY) return false;
+    if (selectedDept !== 'ALL' && c.department && c.department !== selectedDept) return false;
+    if (selectedYear !== 'ALL' && c.year && c.year !== selectedYear) return false;
+    if (selectedSem !== 'ALL' && c.semester && c.semester !== selectedSem) return false;
+    return true;
+  });
+
+  const filteredSubjects = subjects.filter(s => {
+    if (selectedClass && s.classId && s.classId !== selectedClass && s.classId !== 'ALL') return false;
+    return true;
+  });
 
   const startSession = async () => {
     try {
@@ -355,37 +389,57 @@ const AttendanceCamera = () => {
           <p className="text-sm text-slate-400">Simultaneous multi-face detection, IoU tracking, anti-spoofing & second-best margin safety</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div>
-            <select
-              disabled={sessionActive}
-              value={selectedClass}
-              onChange={(e) => setSelectedClass(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white disabled:opacity-50"
-            >
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Academic Year */}
+          <select
+            disabled={sessionActive}
+            value={selectedAY}
+            onChange={(e) => setSelectedAY(e.target.value)}
+            className="bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-white disabled:opacity-50"
+          >
+            <option value="ALL">All Academic Years</option>
+            {academicYears.map(ay => <option key={ay.id} value={ay.year}>{ay.year}</option>)}
+          </select>
 
-          <div>
-            <select
-              disabled={sessionActive}
-              value={selectedSubject}
-              onChange={(e) => setSelectedSubject(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white disabled:opacity-50"
-            >
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
-              ))}
-            </select>
-          </div>
+          {/* Department */}
+          <select
+            disabled={sessionActive}
+            value={selectedDept}
+            onChange={(e) => setSelectedDept(e.target.value)}
+            className="bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-white disabled:opacity-50"
+          >
+            <option value="ALL">All Departments</option>
+            {departments.map(d => <option key={d.id} value={d.name}>{d.name} ({d.code})</option>)}
+          </select>
+
+          {/* Class / Division */}
+          <select
+            disabled={sessionActive}
+            value={selectedClass}
+            onChange={(e) => setSelectedClass(e.target.value)}
+            className="bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-white disabled:opacity-50 font-medium"
+          >
+            {filteredClasses.map((c) => (
+              <option key={c.id} value={c.id}>{c.name} ({c.division})</option>
+            ))}
+          </select>
+
+          {/* Subject */}
+          <select
+            disabled={sessionActive}
+            value={selectedSubject}
+            onChange={(e) => setSelectedSubject(e.target.value)}
+            className="bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-white disabled:opacity-50 font-medium"
+          >
+            {filteredSubjects.map((s) => (
+              <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
+            ))}
+          </select>
 
           {/* Diagnostic Toggle Button */}
           <button
             onClick={() => setDiagnosticMode(!diagnosticMode)}
-            className={`px-3 py-2 text-xs font-semibold rounded-xl border transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all flex items-center gap-1.5 ${
               diagnosticMode ? 'bg-purple-600/20 text-purple-400 border-purple-500/30' : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
             }`}
           >

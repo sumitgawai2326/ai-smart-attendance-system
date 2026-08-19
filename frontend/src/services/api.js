@@ -65,6 +65,12 @@ export const academicAPI = {
   createSemester: (data) => API.post('/academic/semesters', data),
   updateSemester: (id, data) => API.put(`/academic/semesters/${id}`, data),
   deleteSemester: (id) => API.delete(`/academic/semesters/${id}`),
+
+  // Divisions
+  listDivisions: () => API.get('/academic/divisions'),
+  createDivision: (data) => API.post('/academic/divisions', data),
+  updateDivision: (id, data) => API.put(`/academic/divisions/${id}`, data),
+  deleteDivision: (id) => API.delete(`/academic/divisions/${id}`),
 };
 
 export const studentAPI = {

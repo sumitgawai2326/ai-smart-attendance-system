@@ -7,7 +7,8 @@ from app.models.schemas import (
     DepartmentCreate, DepartmentResponse,
     ProgramCreate, ProgramResponse,
     YearLevelCreate, YearLevelResponse,
-    SemesterCreate, SemesterResponse
+    SemesterCreate, SemesterResponse,
+    DivisionCreate, DivisionResponse
 )
 from app.firebase.client import get_db
 
@@ -349,3 +350,86 @@ def delete_semester(semester_id: str):
         raise HTTPException(status_code=404, detail="Semester not found")
     doc_ref.delete()
     return {"status": "SUCCESS", "message": f"Semester '{semester_id}' deleted."}
+
+# =========================================================================
+# 6. DIVISIONS (e.g. A, B, C, AI-1, AI-2, CSE-A)
+# =========================================================================
+@router.get("/divisions", response_model=List[DivisionResponse])
+def list_divisions():
+    db = get_db()
+    docs = db.collection("divisions").get()
+    divs = [d.to_dict() for d in docs]
+    if len(divs) == 0:
+        default_divs = [
+            {"id": "DIV-A", "divisionName": "A", "department": "ALL", "program": "ALL", "createdAt": datetime.now(timezone.utc).isoformat()},
+            {"id": "DIV-B", "divisionName": "B", "department": "ALL", "program": "ALL", "createdAt": datetime.now(timezone.utc).isoformat()},
+            {"id": "DIV-AI1", "divisionName": "AI-1", "department": "Artificial Intelligence & Data Science", "program": "B.Tech in Artificial Intelligence & Data Science", "createdAt": datetime.now(timezone.utc).isoformat()},
+            {"id": "DIV-AI2", "divisionName": "AI-2", "department": "Artificial Intelligence & Data Science", "program": "B.Tech in Artificial Intelligence & Data Science", "createdAt": datetime.now(timezone.utc).isoformat()}
+        ]
+        for d in default_divs:
+            db.collection("divisions").document(d["id"]).set(d)
+            divs.append(d)
+    return sorted(divs, key=lambda x: x.get("divisionName", ""))
+
+@router.post("/divisions", response_model=DivisionResponse, status_code=status.HTTP_201_CREATED)
+def create_division(req: DivisionCreate):
+    db = get_db()
+    d_name = req.divisionName.strip().upper()
+    d_id = f"DIV-{d_name.replace(' ', '').replace('-', '')}"
+    if db.collection("divisions").document(d_id).get().exists:
+        d_id = f"DIV-{d_name.replace(' ', '').replace('-', '')}-{uuid.uuid4().hex[:4].upper()}"
+
+    d_data = {
+        "id": d_id,
+        "divisionName": d_name,
+        "department": req.department or "ALL",
+        "program": req.program or "ALL",
+        "createdAt": datetime.now(timezone.utc).isoformat()
+    }
+    db.collection("divisions").document(d_id).set(d_data)
+    return d_data
+
+@router.put("/divisions/{division_id}", response_model=DivisionResponse)
+def update_division(division_id: str, req: DivisionCreate):
+    db = get_db()
+    doc_ref = db.collection("divisions").document(division_id)
+    if not doc_ref.get().exists:
+        raise HTTPException(status_code=404, detail="Division not found")
+
+    update_data = {
+        "divisionName": req.divisionName.strip().upper(),
+        "department": req.department or "ALL",
+        "program": req.program or "ALL",
+        "updatedAt": datetime.now(timezone.utc).isoformat()
+    }
+    doc_ref.update(update_data)
+    return doc_ref.get().to_dict()
+
+@router.delete("/divisions/{division_id}")
+def delete_division(division_id: str):
+    db = get_db()
+    doc_ref = db.collection("divisions").document(division_id)
+    if not doc_ref.get().exists:
+        raise HTTPException(status_code=404, detail="Division not found")
+    doc_ref.delete()
+    return {"status": "SUCCESS", "message": f"Division '{division_id}' deleted."}
+
+# =========================================================================
+# 7. COURSE & BRANCH ROUTE ALIASES (Courses -> Programs, Branches -> Departments)
+# =========================================================================
+@router.get("/courses", response_model=List[ProgramResponse])
+def list_courses(department: Optional[str] = None):
+    return list_programs(department=department)
+
+@router.post("/courses", response_model=ProgramResponse, status_code=status.HTTP_201_CREATED)
+def create_course(req: ProgramCreate):
+    return create_program(req=req)
+
+@router.get("/branches", response_model=List[DepartmentResponse])
+def list_branches():
+    return list_departments()
+
+@router.post("/branches", response_model=DepartmentResponse, status_code=status.HTTP_201_CREATED)
+def create_branch(req: DepartmentCreate):
+    return create_department(req=req)
+
