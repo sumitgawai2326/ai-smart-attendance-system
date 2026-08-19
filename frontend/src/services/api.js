@@ -36,6 +36,8 @@ export const wakeUpBackend = async () => {
 
 export const authAPI = {
   login: (email, password) => API.post('/auth/login', { email, password }),
+  forgotPassword: (email) => API.post('/auth/forgot-password', { email }),
+  resetPassword: (email, otp, newPassword) => API.post('/auth/reset-password', { email, otp, newPassword }),
   getProfile: (userId) => API.get(`/auth/me?user_id=${userId}`),
   wakeUp: wakeUpBackend,
 };

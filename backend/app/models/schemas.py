@@ -38,6 +38,14 @@ class TokenResponse(BaseModel):
     role: UserRole
     user: Dict[str, Any]
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    otp: str
+    newPassword: str
+
 # --- Student Schemas ---
 class StudentCreate(BaseModel):
     rollNumber: str

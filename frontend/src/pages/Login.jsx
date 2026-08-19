@@ -1,13 +1,25 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Camera, Lock, Mail, ArrowRight, ShieldCheck, UserCheck, Shield, Loader2, Info, X, HelpCircle, Server, CheckCircle2 } from 'lucide-react';
+import { authAPI } from '../services/api';
+import { Camera, Lock, Mail, ArrowRight, ShieldCheck, UserCheck, Shield, Loader2, Info, X, HelpCircle, Server, CheckCircle2, KeyRound, Smartphone, AlertCircle } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showHelpModal, setShowHelpModal] = useState(false);
+
+  // Forgot Password / OTP Modal State
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotStep, setForgotStep] = useState(1); // 1: Email Input, 2: OTP + New Password
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState({ text: '', type: '', generatedOtp: '' });
+
   const { login, loading } = useAuth();
   const navigate = useNavigate();
 
@@ -28,6 +40,74 @@ const Login = () => {
     setEmail(roleEmail);
     setPassword('password123');
     setError('');
+  };
+
+  // Step 1: Send OTP
+  const handleSendOtp = async (e) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) return;
+    setForgotLoading(true);
+    setForgotMessage({ text: '', type: '', generatedOtp: '' });
+
+    try {
+      const res = await authAPI.forgotPassword(forgotEmail.trim());
+      setForgotMessage({
+        text: `✓ 6-Digit OTP verification code sent to ${res.data.maskedTarget || forgotEmail}!`,
+        type: 'success',
+        generatedOtp: res.data.otp || ''
+      });
+      setForgotStep(2);
+    } catch (err) {
+      setForgotMessage({
+        text: err.response?.data?.detail || 'Failed to send OTP. Please verify email address.',
+        type: 'error',
+        generatedOtp: ''
+      });
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  // Step 2: Verify OTP and Reset Password
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setForgotMessage({ text: 'Passwords do not match. Please re-enter.', type: 'error', generatedOtp: forgotMessage.generatedOtp });
+      return;
+    }
+    if (newPassword.length < 4) {
+      setForgotMessage({ text: 'Password must be at least 4 characters.', type: 'error', generatedOtp: forgotMessage.generatedOtp });
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      const res = await authAPI.resetPassword(forgotEmail.trim(), otpCode.trim(), newPassword);
+      setForgotMessage({
+        text: '✓ Password updated successfully! Please sign in with your new password.',
+        type: 'success',
+        generatedOtp: ''
+      });
+      // Fill email in login form
+      setEmail(forgotEmail);
+      setPassword('');
+      setTimeout(() => {
+        setShowForgotModal(false);
+        setForgotStep(1);
+        setForgotEmail('');
+        setOtpCode('');
+        setNewPassword('');
+        setConfirmPassword('');
+      }, 2000);
+    } catch (err) {
+      setForgotMessage({
+        text: err.response?.data?.detail || 'Failed to reset password. Please check OTP code.',
+        type: 'error',
+        generatedOtp: forgotMessage.generatedOtp
+      });
+    } finally {
+      setForgotLoading(false);
+    }
   };
 
   return (
@@ -63,7 +143,7 @@ const Login = () => {
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-4" autoComplete="off">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
               Email Address
@@ -72,10 +152,11 @@ const Login = () => {
               <Mail className="w-5 h-5 text-slate-500 absolute left-3.5 top-3" />
               <input
                 type="email"
+                name="user_email_login_field"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="e.g. teacher@college.edu"
+                placeholder="Enter email (e.g. teacher@college.edu)"
                 autoComplete="off"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-11 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-slate-600"
               />
@@ -83,18 +164,33 @@ const Login = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-              Password
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Password
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotEmail(email);
+                  setForgotStep(1);
+                  setForgotMessage({ text: '', type: '', generatedOtp: '' });
+                  setShowForgotModal(true);
+                }}
+                className="text-xs text-blue-400 hover:text-blue-300 transition-colors font-medium"
+              >
+                Forgot Password?
+              </button>
+            </div>
             <div className="relative">
               <Lock className="w-5 h-5 text-slate-500 absolute left-3.5 top-3" />
               <input
                 type="password"
+                name="user_pwd_login_field"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter password"
-                autoComplete="off"
+                autoComplete="new-password"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-11 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-slate-600"
               />
             </div>
@@ -148,6 +244,156 @@ const Login = () => {
           </div>
         </div>
       </div>
+
+      {/* Forgot Password / OTP Modal */}
+      {showForgotModal && (
+        <div className="fixed inset-0 bg-slate-950/90 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 flex items-center justify-center">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Reset Password</h3>
+                  <p className="text-xs text-slate-400">Verify via 6-digit OTP sent to your email</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowForgotModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {forgotMessage.text && (
+              <div className={`p-3.5 rounded-xl text-xs font-medium space-y-1.5 ${
+                forgotMessage.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+              }`}>
+                <p>{forgotMessage.text}</p>
+                {forgotMessage.generatedOtp && (
+                  <div className="mt-2 p-2 bg-emerald-950/80 border border-emerald-500/40 rounded-lg flex items-center justify-between">
+                    <span className="text-[11px] text-emerald-300">Your Verification OTP:</span>
+                    <span className="font-mono font-bold text-sm tracking-widest text-white bg-emerald-600 px-2 py-0.5 rounded">
+                      {forgotMessage.generatedOtp}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {forgotStep === 1 ? (
+              <form onSubmit={handleSendOtp} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+                    Enter Registered Account Email
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                    <input
+                      type="email"
+                      required
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="e.g. teacher@college.edu"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotModal(false)}
+                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-blue-600/20 flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    {forgotLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Send OTP'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">
+                    6-Digit OTP Code
+                  </label>
+                  <div className="relative">
+                    <Smartphone className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                    <input
+                      type="text"
+                      maxLength={6}
+                      required
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value)}
+                      placeholder="e.g. 123456"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs font-mono text-white tracking-widest focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                    <input
+                      type="password"
+                      required
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">
+                    Confirm New Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                    <input
+                      type="password"
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForgotStep(1)}
+                    className="py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs rounded-xl"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    {forgotLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Verify OTP & Reset Password'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Interactive System Help / Info Modal */}
       {showHelpModal && (
