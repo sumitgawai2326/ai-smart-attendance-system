@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { studentAPI, teacherAPI, classAPI, subjectAPI } from '../services/api';
 import StatCard from '../components/StatCard';
-import { Users, GraduationCap, School, BookOpen, Plus, Search, CheckCircle, AlertCircle, Trash2, Loader2 } from 'lucide-react';
+import { Users, GraduationCap, School, BookOpen, Plus, Search, CheckCircle, AlertCircle, Trash2, Edit, Camera, Loader2, User } from 'lucide-react';
 
 const AdminDashboard = () => {
+  const navigate = useNavigate();
   const [students, setStudents] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -13,12 +15,17 @@ const AdminDashboard = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('students');
 
-  // Modal State
+  // Add Student Modal State
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [newStudent, setNewStudent] = useState({
     rollNumber: '', name: '', email: '', classId: 'CLS-AIDS-3A', division: 'A', branch: 'AI & DS', year: '3rd Year'
   });
 
+  // Edit Student Modal State
+  const [showEditStudentModal, setShowEditStudentModal] = useState(false);
+  const [editingStudent, setEditingStudent] = useState(null);
+
+  // Add Teacher Modal State
   const [showAddTeacherModal, setShowAddTeacherModal] = useState(false);
   const [newTeacher, setNewTeacher] = useState({
     name: '', email: '', department: 'AI & Data Science', assignedClasses: ['CLS-AIDS-3A']
@@ -56,9 +63,8 @@ const AdminDashboard = () => {
     try {
       const res = await studentAPI.create(newStudent);
       const createdStudent = res.data;
-      // Optimistic instant UI update (< 50ms) without triggering 4 full API re-fetches
       setStudents((prev) => [createdStudent, ...prev]);
-      setMessage({ text: `Student '${createdStudent.name}' added successfully!`, type: 'success' });
+      setMessage({ text: `Student '${createdStudent.name}' registered successfully!`, type: 'success' });
       setShowAddStudentModal(false);
       setNewStudent({ rollNumber: '', name: '', email: '', classId: 'CLS-AIDS-3A', division: 'A', branch: 'AI & DS', year: '3rd Year' });
     } catch (err) {
@@ -68,13 +74,46 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleOpenEditStudent = (student) => {
+    setEditingStudent({ ...student });
+    setShowEditStudentModal(true);
+  };
+
+  const handleUpdateStudent = async (e) => {
+    e.preventDefault();
+    if (!editingStudent) return;
+    setIsSubmitting(true);
+    try {
+      const res = await studentAPI.update(editingStudent.id, editingStudent);
+      const updated = res.data;
+      setStudents((prev) => prev.map(s => s.id === updated.id ? updated : s));
+      setMessage({ text: `Student '${updated.name}' updated successfully!`, type: 'success' });
+      setShowEditStudentModal(false);
+      setEditingStudent(null);
+    } catch (err) {
+      setMessage({ text: err.response?.data?.detail || 'Failed to update student.', type: 'error' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteStudent = async (studentId, studentName) => {
+    if (!window.confirm(`Are you sure you want to permanently delete student '${studentName}'? This will remove all their enrollment and attendance records.`)) return;
+    try {
+      await studentAPI.delete(studentId);
+      setStudents((prev) => prev.filter(s => s.id !== studentId));
+      setMessage({ text: `Student '${studentName}' deleted permanently.`, type: 'success' });
+    } catch (err) {
+      setMessage({ text: err.response?.data?.detail || 'Failed to delete student.', type: 'error' });
+    }
+  };
+
   const handleCreateTeacher = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
       const res = await teacherAPI.create(newTeacher);
       const createdTeacher = res.data;
-      // Optimistic instant UI update
       setTeachers((prev) => [createdTeacher, ...prev]);
       setMessage({ text: `Faculty Teacher '${createdTeacher.name}' registered successfully!`, type: 'success' });
       setShowAddTeacherModal(false);
@@ -90,14 +129,13 @@ const AdminDashboard = () => {
     if (!window.confirm('Are you sure you want to delete this student\'s biometric face data?')) return;
     try {
       await studentAPI.deleteFace(studentId);
-      setStudents((prev) => prev.map(s => s.id === studentId ? { ...s, hasFaceEnrolled: false } : s));
+      setStudents((prev) => prev.map(s => s.id === studentId ? { ...s, hasFaceEnrolled: false, photoUrl: null } : s));
       setMessage({ text: 'Biometric face data permanently deleted.', type: 'success' });
     } catch (err) {
       setMessage({ text: 'Failed to delete face data.', type: 'error' });
     }
   };
 
-  // Memoized search filtering for instant responsive typing without lag
   const filteredStudents = useMemo(() => {
     if (!searchQuery.trim()) return students;
     const q = searchQuery.toLowerCase();
@@ -205,7 +243,7 @@ const AdminDashboard = () => {
                 <thead className="bg-slate-950/60 text-slate-400 uppercase font-semibold border-b border-slate-800">
                   <tr>
                     <th className="py-3 px-4">Roll No</th>
-                    <th className="py-3 px-4">Student Name</th>
+                    <th className="py-3 px-4">Student</th>
                     <th className="py-3 px-4">Email</th>
                     <th className="py-3 px-4">Branch & Year</th>
                     <th className="py-3 px-4">AI Face Status</th>
@@ -221,9 +259,20 @@ const AdminDashboard = () => {
                     </tr>
                   ) : (
                     filteredStudents.map((s) => (
-                      <tr key={s.id} className="hover:bg-slate-800/40">
+                      <tr key={s.id} className="hover:bg-slate-800/40 transition-colors">
                         <td className="py-3 px-4 font-mono font-semibold text-white">{s.rollNumber}</td>
-                        <td className="py-3 px-4 font-medium text-white">{s.name}</td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-7 h-7 rounded-lg bg-blue-500/20 border border-blue-500/30 overflow-hidden flex items-center justify-center shrink-0">
+                              {s.photoUrl ? (
+                                <img src={s.photoUrl} alt={s.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="font-bold text-xs text-blue-400">{s.name?.charAt(0) || 'S'}</span>
+                              )}
+                            </div>
+                            <span className="font-medium text-white">{s.name}</span>
+                          </div>
+                        </td>
                         <td className="py-3 px-4 text-slate-400">{s.email}</td>
                         <td className="py-3 px-4">{s.branch} - {s.year}</td>
                         <td className="py-3 px-4">
@@ -233,20 +282,39 @@ const AdminDashboard = () => {
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-[11px] font-medium">
-                              <AlertCircle className="w-3 h-3" /> Pending Enrollment
+                              <AlertCircle className="w-3 h-3" /> Pending
                             </span>
                           )}
                         </td>
                         <td className="py-3 px-4 text-right">
-                          {s.hasFaceEnrolled && (
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* Enroll / Re-enroll Face Button */}
                             <button
-                              onClick={() => handleDeleteFaceData(s.id)}
-                              className="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 p-1.5 rounded transition-all"
-                              title="Delete Face Biometric Data"
+                              onClick={() => navigate('/admin/enrollment')}
+                              className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 p-1.5 rounded-lg transition-all"
+                              title="Enroll / Update Face"
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Edit Student Info Button */}
+                            <button
+                              onClick={() => handleOpenEditStudent(s)}
+                              className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 p-1.5 rounded-lg transition-all"
+                              title="Edit Student Information"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Delete Student Button */}
+                            <button
+                              onClick={() => handleDeleteStudent(s.id, s.name)}
+                              className="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 p-1.5 rounded-lg transition-all"
+                              title="Delete Student"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                          )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -341,7 +409,7 @@ const AdminDashboard = () => {
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Full Name *</label>
                   <input
                     type="text" required value={newStudent.name} onChange={(e) => setNewStudent({...newStudent, name: e.target.value})}
-                    placeholder="e.g. More Yashraj" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-500"
+                    placeholder="e.g. Yashraj More" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -351,6 +419,22 @@ const AdminDashboard = () => {
                   type="email" required value={newStudent.email} onChange={(e) => setNewStudent({...newStudent, email: e.target.value})}
                   placeholder="student@college.edu" className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-500"
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Branch</label>
+                  <input
+                    type="text" value={newStudent.branch} onChange={(e) => setNewStudent({...newStudent, branch: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Year</label>
+                  <input
+                    type="text" value={newStudent.year} onChange={(e) => setNewStudent({...newStudent, year: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-500"
+                  />
+                </div>
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button
@@ -372,6 +456,79 @@ const AdminDashboard = () => {
                     </>
                   ) : (
                     'Save Student'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Student Modal */}
+      {showEditStudentModal && editingStudent && (
+        <div className="fixed inset-0 bg-slate-950/90 flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-lg shadow-2xl">
+            <h3 className="text-lg font-bold text-white mb-4">Edit Student Information</h3>
+            <form onSubmit={handleUpdateStudent} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Roll Number *</label>
+                  <input
+                    type="text" required value={editingStudent.rollNumber} onChange={(e) => setEditingStudent({...editingStudent, rollNumber: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Full Name *</label>
+                  <input
+                    type="text" required value={editingStudent.name} onChange={(e) => setEditingStudent({...editingStudent, name: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Email Address *</label>
+                <input
+                  type="email" required value={editingStudent.email} onChange={(e) => setEditingStudent({...editingStudent, email: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Branch</label>
+                  <input
+                    type="text" value={editingStudent.branch || ''} onChange={(e) => setEditingStudent({...editingStudent, branch: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">Year</label>
+                  <input
+                    type="text" value={editingStudent.year || ''} onChange={(e) => setEditingStudent({...editingStudent, year: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => { setShowEditStudentModal(false); setEditingStudent(null); }}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center gap-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Updating...
+                    </>
+                  ) : (
+                    'Update Student'
                   )}
                 </button>
               </div>

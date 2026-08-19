@@ -59,6 +59,7 @@ class StudentResponse(BaseModel):
     year: str = "3rd Year"
     hasFaceEnrolled: bool = False
     enrolledSamplesCount: Optional[int] = 0
+    photoUrl: Optional[str] = None
     createdAt: Optional[str] = None
 
 class FaceEnrollmentRequest(BaseModel):

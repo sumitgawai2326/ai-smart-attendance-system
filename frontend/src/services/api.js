@@ -44,6 +44,8 @@ export const studentAPI = {
   create: (data) => API.post('/students', data),
   list: (classId) => API.get('/students', { params: { class_id: classId } }),
   get: (id) => API.get(`/students/${id}`),
+  update: (id, data) => API.put(`/students/${id}`, data),
+  delete: (id) => API.delete(`/students/${id}`),
   enrollFace: (id, imageSamples) => API.post(`/students/${id}/enroll-face`, { studentId: id, imageSamples }),
   deleteFace: (id) => API.delete(`/students/${id}/face`),
 };

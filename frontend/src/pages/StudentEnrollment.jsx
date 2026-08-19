@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import { studentAPI } from '../services/api';
-import { Camera, CheckCircle2, AlertCircle, RefreshCw, UserCheck, ShieldAlert } from 'lucide-react';
+import { Camera, CheckCircle2, AlertCircle, RefreshCw, UserCheck, Trash2, Loader2, User } from 'lucide-react';
 
 const StudentEnrollment = () => {
   const [students, setStudents] = useState([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [samples, setSamples] = useState([]);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [enrollmentStatus, setEnrollmentStatus] = useState({ text: '', type: '' });
   const [guidanceStep, setGuidanceStep] = useState(0);
 
@@ -16,7 +17,7 @@ const StudentEnrollment = () => {
     "LOOK STRAIGHT into the camera with neutral expression",
     "Turn your head SLIGHTLY LEFT",
     "Turn your head SLIGHTLY RIGHT",
-    "BLINK YOUR EYES naturally"
+    "BLINK YOUR EYES naturally & smile gently"
   ];
 
   useEffect(() => {
@@ -27,7 +28,7 @@ const StudentEnrollment = () => {
     try {
       const res = await studentAPI.list();
       setStudents(res.data);
-      if (res.data.length > 0) {
+      if (res.data.length > 0 && !selectedStudentId) {
         setSelectedStudentId(res.data[0].id);
       }
     } catch (err) {
@@ -43,6 +44,7 @@ const StudentEnrollment = () => {
       if (guidanceStep < guidanceMessages.length - 1) {
         setGuidanceStep((prev) => prev + 1);
       }
+      setEnrollmentStatus({ text: `Sample #${samples.length + 1} captured! Click 'Save Face Embedding' when ready.`, type: 'info' });
     }
   };
 
@@ -58,27 +60,54 @@ const StudentEnrollment = () => {
       return;
     }
     if (samples.length === 0) {
-      setEnrollmentStatus({ text: 'Please capture at least 2 face samples.', type: 'error' });
+      setEnrollmentStatus({ text: 'Please capture at least 1 clear face sample.', type: 'error' });
       return;
     }
 
     setIsCapturing(true);
-    setEnrollmentStatus({ text: 'Processing AI Face Embeddings...', type: 'info' });
+    setEnrollmentStatus({ text: 'Processing & saving biometric facial template to cloud...', type: 'info' });
 
     try {
       const res = await studentAPI.enrollFace(selectedStudentId, samples);
       setEnrollmentStatus({
-        text: `Face Enrollment Successful! Generated biometric vector from ${res.data.validSamplesCount} samples.`,
+        text: `✓ Face Enrollment Successful! Saved ${res.data.validSamplesCount} biometric templates for student.`,
         type: 'success'
       });
-      loadStudents();
+      // Optimistically update student in local state
+      setStudents((prev) => prev.map(s => s.id === selectedStudentId ? {
+        ...s,
+        hasFaceEnrolled: true,
+        enrolledSamplesCount: res.data.validSamplesCount,
+        photoUrl: samples[0]
+      } : s));
+      setSamples([]);
     } catch (err) {
       setEnrollmentStatus({
-        text: err.response?.data?.detail || 'Face enrollment failed. Please try again.',
+        text: err.response?.data?.detail || 'Face enrollment failed. Please ensure face is well-lit and centered.',
         type: 'error'
       });
     } finally {
       setIsCapturing(false);
+    }
+  };
+
+  const handleDeleteFace = async () => {
+    if (!selectedStudentId || !window.confirm('Delete enrolled face data for this student?')) return;
+    setIsDeleting(true);
+    try {
+      await studentAPI.deleteFace(selectedStudentId);
+      setStudents((prev) => prev.map(s => s.id === selectedStudentId ? {
+        ...s,
+        hasFaceEnrolled: false,
+        enrolledSamplesCount: 0,
+        photoUrl: null
+      } : s));
+      setEnrollmentStatus({ text: 'Face biometric data deleted.', type: 'info' });
+      resetCapture();
+    } catch (err) {
+      setEnrollmentStatus({ text: 'Failed to delete face data.', type: 'error' });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -88,7 +117,7 @@ const StudentEnrollment = () => {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-white tracking-tight">AI Student Face Enrollment</h2>
-        <p className="text-sm text-slate-400">Capture multi-angle face samples to build biometrical embedding templates</p>
+        <p className="text-sm text-slate-400">Capture multi-angle webcam samples to build high-accuracy biometric templates</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -104,7 +133,7 @@ const StudentEnrollment = () => {
               audio={false}
               ref={webcamRef}
               screenshotFormat="image/jpeg"
-              screenshotQuality={0.8}
+              screenshotQuality={0.85}
               className="w-full h-full object-cover"
               videoConstraints={{ width: 640, height: 480, facingMode: "user" }}
             />
@@ -131,7 +160,7 @@ const StudentEnrollment = () => {
               onClick={resetCapture}
               className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all"
             >
-              <RefreshCw className="w-4 h-4" /> Reset Samples
+              <RefreshCw className="w-4 h-4" /> Reset ({samples.length})
             </button>
             <button
               onClick={captureSample}
@@ -159,30 +188,72 @@ const StudentEnrollment = () => {
               >
                 {students.map((s) => (
                   <option key={s.id} value={s.id}>
-                    Roll {s.rollNumber} - {s.name} ({s.hasFaceEnrolled ? 'Enrolled' : 'Pending'})
+                    Roll {s.rollNumber} - {s.name} ({s.hasFaceEnrolled ? '✓ Enrolled' : 'Pending'})
                   </option>
                 ))}
               </select>
             </div>
 
             {currentStudent && (
-              <div className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl space-y-1 text-xs">
-                <p className="text-white font-medium">{currentStudent.name}</p>
-                <p className="text-slate-400">Roll No: {currentStudent.rollNumber} | Class: {currentStudent.classId}</p>
-                <p className="text-slate-400">{currentStudent.email}</p>
+              <div className="p-4 bg-slate-950/70 border border-slate-800 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 overflow-hidden flex items-center justify-center">
+                      {currentStudent.photoUrl ? (
+                        <img src={currentStudent.photoUrl} alt={currentStudent.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <User className="w-5 h-5 text-blue-400" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-white font-bold text-sm">{currentStudent.name}</p>
+                      <p className="text-slate-400 text-xs">Roll No: <span className="font-mono text-blue-400">{currentStudent.rollNumber}</span></p>
+                    </div>
+                  </div>
+                  {currentStudent.hasFaceEnrolled ? (
+                    <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Enrolled
+                    </span>
+                  ) : (
+                    <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" /> Pending
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-xs text-slate-400 border-t border-slate-800/80 pt-2 space-y-1">
+                  <p>Class: <span className="text-slate-200">{currentStudent.classId}</span> | Branch: <span className="text-slate-200">{currentStudent.branch}</span></p>
+                  <p>Email: <span className="text-slate-200">{currentStudent.email}</span></p>
+                </div>
+
+                {currentStudent.hasFaceEnrolled && (
+                  <button
+                    onClick={handleDeleteFace}
+                    disabled={isDeleting}
+                    className="w-full py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Delete Face Biometrics
+                  </button>
+                )}
               </div>
             )}
 
             <div>
               <p className="text-xs font-semibold text-slate-400 mb-2">Captured Samples ({samples.length})</p>
-              <div className="grid grid-cols-4 gap-2">
-                {samples.map((src, idx) => (
-                  <div key={idx} className="relative aspect-square bg-slate-950 rounded-lg overflow-hidden border border-blue-500/50">
-                    <img src={src} alt={`sample-${idx}`} className="w-full h-full object-cover" />
-                    <span className="absolute bottom-0 right-0 bg-blue-600 text-[9px] text-white font-bold px-1 rounded-tl">#{idx + 1}</span>
-                  </div>
-                ))}
-              </div>
+              {samples.length === 0 ? (
+                <div className="py-6 border border-dashed border-slate-800 rounded-xl text-center text-slate-500 text-xs">
+                  No samples captured yet. Click "Capture Sample" on the left.
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 gap-2">
+                  {samples.map((src, idx) => (
+                    <div key={idx} className="relative aspect-square bg-slate-950 rounded-lg overflow-hidden border border-blue-500/50">
+                      <img src={src} alt={`sample-${idx}`} className="w-full h-full object-cover" />
+                      <span className="absolute bottom-0 right-0 bg-blue-600 text-[9px] text-white font-bold px-1 rounded-tl">#{idx + 1}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {enrollmentStatus.text && (
@@ -199,9 +270,19 @@ const StudentEnrollment = () => {
             <button
               onClick={handleSubmitEnrollment}
               disabled={isCapturing || samples.length === 0}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-xs rounded-xl shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all"
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-semibold text-xs rounded-xl shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed"
             >
-              <UserCheck className="w-4 h-4" /> Save Face Embedding & Finish
+              {isCapturing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Processing Face Embedding...</span>
+                </>
+              ) : (
+                <>
+                  <UserCheck className="w-4 h-4" />
+                  <span>Save Face Embedding & Finish</span>
+                </>
+              )}
             </button>
           </div>
         </div>
