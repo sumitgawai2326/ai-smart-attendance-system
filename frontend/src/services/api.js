@@ -1,12 +1,13 @@
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+export const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
 const API = axios.create({
   baseURL: `${API_BASE}/api/v1`,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: 60000, // 60s timeout to gracefully accommodate cloud cold starts (Render free tier spin-up)
 });
 
 // Lightweight client-side memory cache for static reference data
@@ -22,9 +23,21 @@ export const clearCache = () => {
   cache.teachers = null;
 };
 
+// Automatic pre-warming ping for cloud instances
+export const wakeUpBackend = async () => {
+  try {
+    const res = await axios.get(`${API_BASE}/health`, { timeout: 45000 });
+    return res.data;
+  } catch (e) {
+    console.warn('[PRE-WARM] Backend wake-up ping in progress...', e.message);
+    return null;
+  }
+};
+
 export const authAPI = {
   login: (email, password) => API.post('/auth/login', { email, password }),
   getProfile: (userId) => API.get(`/auth/me?user_id=${userId}`),
+  wakeUp: wakeUpBackend,
 };
 
 export const studentAPI = {

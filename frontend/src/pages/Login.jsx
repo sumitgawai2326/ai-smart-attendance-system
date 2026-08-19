@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Camera, Lock, Mail, ArrowRight, ShieldCheck, UserCheck, Shield } from 'lucide-react';
+import { Camera, Lock, Mail, ArrowRight, ShieldCheck, UserCheck, Shield, Loader2 } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -26,6 +26,7 @@ const Login = () => {
   const fillQuickLogin = (roleEmail) => {
     setEmail(roleEmail);
     setPassword('password123');
+    setError('');
   };
 
   return (
@@ -44,7 +45,7 @@ const Login = () => {
         </div>
 
         {error && (
-          <div className="mb-6 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-medium">
+          <div className="mb-6 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-medium leading-relaxed">
             {error}
           </div>
         )}
@@ -87,10 +88,13 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 transition-all mt-2 disabled:opacity-50"
+            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 transition-all mt-2 disabled:opacity-60"
           >
             {loading ? (
-              <span>Authenticating...</span>
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <span>Connecting to Cloud Backend...</span>
+              </>
             ) : (
               <>
                 <span>Sign In to Portal</span>

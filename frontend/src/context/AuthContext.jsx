@@ -19,6 +19,11 @@ export const AuthProvider = ({ children }) => {
 
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    // Pre-warm backend container in background on initial page load
+    authAPI.wakeUp();
+  }, []);
+
   const login = async (email, password) => {
     setLoading(true);
     try {
@@ -35,7 +40,17 @@ export const AuthProvider = ({ children }) => {
 
       return data;
     } catch (err) {
-      throw err.response?.data?.detail || 'Authentication failed. Check your credentials.';
+      if (err.response?.data?.detail) {
+        throw err.response.data.detail;
+      } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        throw 'Cloud server is waking up from standby (Render spin-up takes ~20s on first load). Please wait a moment and click Sign In again.';
+      } else if (!err.response) {
+        throw 'Connecting to cloud backend... If the server was idle, it takes a few seconds to wake up. Please click Sign In again in a few moments.';
+      } else if (err.response?.status === 401) {
+        throw 'Invalid email or password. Please check your credentials.';
+      } else {
+        throw 'Authentication failed. Please verify credentials or try again.';
+      }
     } finally {
       setLoading(false);
     }
